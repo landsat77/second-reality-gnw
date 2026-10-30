@@ -40,6 +40,10 @@ zip has everything (the demo's data are public domain, like its code).
     make host       # PC version: ./SecondReality_host build/sd/homebrews/SecondReality.bin
     make check      # the PC version plays 700 s of the demo, pictures compared
 
+`tests/qemu` runs the console's code (same compiler and flags) on QEMU's
+Cortex-M7 (`make -C tests/qemu run`): crashes, ARM-only differences and an
+estimate of the CPU time per part.
+
 The PC version takes environment variables for tests (`host/host_sr.h`):
 `SR_FAST=1` (virtual time), `SR_SECONDS`, `SR_JUMP="vbl:part"`, `SR_SHOTS`,
 `SR_HASH`, `SR_WAV`, `SR_CPU=1` (CPU time per part).

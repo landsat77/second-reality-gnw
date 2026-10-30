@@ -38,7 +38,14 @@ second part of this file is the SDK's generic guide.
 - PC: `make host`, `make check` (tests/expected.txt: per-part SHA-1 of the
   picture CRCs, 700 s). `SR_VRAM_PROBE=n`, `SR_WDOG_MS=n`, `SR_CPU=1` for
   investigations (host/host_sr.c, host_emu.c).
-- Not tested yet on gwemu / the console (2026-10-30).
+- `tests/qemu`: the same code (ARM, device flags, host/*.c stand-ins, no
+  SDL) on QEMU's mps2-an500 (Cortex-M7), semihosting; `qemu_env.txt` holds
+  the SR_* variables. Fast mode: the 700 s of pictures are identical to the
+  PC's (checked 2026-10-30). Real time with `-icount shift=2` (250 MIPS):
+  ~70 pictures/s in most parts, Plasmacube 43/s, Alku 57/s, Jellypic 56/s,
+  Techno 51/s; busy 20-60 % (Plasmacube 82 %); no sound missed.
+- Not tested yet on gwemu (its build was refused in this environment) nor
+  on the console (2026-10-30).
 
 ### Releases
 
