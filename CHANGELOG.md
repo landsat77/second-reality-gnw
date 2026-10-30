@@ -15,7 +15,7 @@ First version: Second Reality (Future Crew, 1993), from Second Reality++
 - The data (4 MB) in `SecondReality.srd`, beside the `.bin`, read in place
   from the external flash.
 - Pause menu: go to a part, loop the demo. GAME = next part, TIME =
-  previous part. Saves: the part being played (the demo starts again from
+  previous part; A or B in the end scroller: back to the launcher. Saves: the part being played (the demo starts again from
   there, also with "Resume").
 - `/data/secondreality/SecondReality/log.txt`: a line per part (pictures
   per second, idle time, missed sound) for the tests on the console.

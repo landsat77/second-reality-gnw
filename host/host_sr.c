@@ -25,12 +25,15 @@ static void init(void)
     t0_ms = host_platform_ticks_ms();
 }
 
+static uint64_t t0_us;
 static uint64_t now_us(void)
 {
     init();
     if (fast)
         return vtime_us;
-    return (uint64_t)(host_platform_ticks_ms() - t0_ms) * 1000;
+    if (!t0_us)
+        t0_us = host_platform_ticks_us();
+    return host_platform_ticks_us() - t0_us;
 }
 
 /* --- LCD at 70 Hz --- */
@@ -221,9 +224,13 @@ static int cpu_last_part = -1;
 static uint64_t cpu_last_vt;
 static double cpu_ms(void)
 {
+#ifdef SR_QEMU
+    return host_platform_ticks_us() / 1000.0; /* (the CPU is never shared) */
+#else
     struct timespec ts;
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
+#endif
 }
 static void cpu_report(void)
 {
@@ -243,9 +250,9 @@ void host_sr_idle(void)
         if (busy_from >= 0)
             cpu_part[part] += now - busy_from;
         if (cpu_last_part >= 0)
-            vt_part[cpu_last_part] += vtime_us - cpu_last_vt;
+            vt_part[cpu_last_part] += now_us() - cpu_last_vt;
         cpu_last_part = part;
-        cpu_last_vt = vtime_us;
+        cpu_last_vt = now_us();
         static int registered;
         if (!registered) {
             atexit(cpu_report);
@@ -337,6 +344,7 @@ void odroid_system_switch_app(int app)
     exit(0);
 }
 
+#ifndef SR_QEMU
 /* --- SR_VRAM_PROBE=1: which parts use which part of Shim::vram (debug) --- */
 #include <signal.h>
 #include <sys/mman.h>
@@ -407,3 +415,7 @@ void host_sr_vram_probe(void)
     if (e > s)
         mprotect((void *)s, e - s, PROT_NONE);
 }
+#else
+int host_sr_vram_clear(void) { return 0; }
+void host_sr_vram_probe(void) {}
+#endif

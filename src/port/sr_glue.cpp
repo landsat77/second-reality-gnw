@@ -112,6 +112,7 @@ namespace
     uint32_t g_lastVbl;
     int g_part = -1;
     int g_jump = -1; // asked by sr_demo_jump()
+    bool g_quit;     // asked by sr_demo_quit()
     bool g_playing; // a song is loaded (st3play)
 }
 
@@ -162,7 +163,7 @@ bool demo_wantstoquit()
 {
     // a part asked from the pause menu: the current one ends (its loops
     // test this), then sr_demo_run() goes to the new one
-    return g_jump >= 0;
+    return g_jump >= 0 || g_quit;
 }
 
 int demo_vsync(bool updateAudio)
@@ -251,14 +252,17 @@ extern "C" void sr_demo_jump(int part)
     if (part >= 0 && part < SR_PART_COUNT) g_jump = part;
 }
 
-extern "C" void sr_demo_check_jump(void) {}
+extern "C" void sr_demo_quit(void)
+{
+    g_quit = true;
+}
 
 // main.cpp's mainLoop()
 extern "C" void sr_demo_run(int start)
 {
     Music::Song lastMusic = Music::Song::COUNT;
 
-    for (int index = start; index < SR_PART_COUNT; index++)
+    for (int index = start; index < SR_PART_COUNT && !g_quit; index++)
     {
         if (g_jump >= 0)
         {

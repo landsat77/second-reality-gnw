@@ -1,0 +1,5 @@
+obj/
+sr_qemu.elf
+*.srd
+SecondReality.bin
+qemu_env.txt

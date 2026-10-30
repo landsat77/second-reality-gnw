@@ -57,8 +57,8 @@ void sr_demo_run(int part);
 int sr_demo_part(void);
 /* asks the demo to start again at that part (from the console's loop) */
 void sr_demo_jump(int part);
-/* called from sr_plat_service(): goes to the part asked by sr_demo_jump() */
-void sr_demo_check_jump(void);
+/* the end (back to the launcher) */
+void sr_demo_quit(void);
 
 /* memory of the parts (sr_overlay.c / host: no overlays) */
 void sr_overlay_load(int group);

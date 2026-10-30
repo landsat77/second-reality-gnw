@@ -10,7 +10,9 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <sys/stat.h>
+#ifndef SR_QEMU
 #include <sys/mman.h>
+#endif
 
 #include "host_compat.h"
 #include "host_platform.h"
@@ -633,11 +635,20 @@ uint8_t *odroid_overlay_cache_file_in_flash(const char *file_path, uint32_t *fil
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
+#ifdef SR_QEMU
+    uint8_t *data = (uint8_t *)malloc(size > 0 ? (size_t)size : 1);
+    if (!data || fread(data, 1, (size_t)size, f) != (size_t)size) {
+        fclose(f);
+        return NULL;
+    }
+    fclose(f);
+#else
     /* read-only, as the flash: a write to it crashes on the PC too */
     uint8_t *data = (uint8_t *)mmap(NULL, size > 0 ? (size_t)size : 1, PROT_READ, MAP_PRIVATE, fileno(f), 0);
     fclose(f);
     if (data == MAP_FAILED)
         return NULL;
+#endif
     if (file_size_p)
         *file_size_p = (uint32_t)size;
     return data;
@@ -858,9 +869,13 @@ void wdog_refresh(void)
     if (limit < 0)
         limit = getenv("SR_WDOG_MS") ? atof(getenv("SR_WDOG_MS")) : 0;
     if (limit > 0) {
+#ifdef SR_QEMU
+        double now = host_platform_ticks_us() / 1000.0;
+#else
         struct timespec ts;
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
         double now = ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
+#endif
         if (last > 0 && now - last > limit && sr_demo_part() == last_part)
             fprintf(stderr, "wdog: %.1f ms without refresh (part %d)\n", now - last, sr_demo_part());
         last = now;

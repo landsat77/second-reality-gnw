@@ -54,10 +54,11 @@ BUILD_DIR ?= build/$(PROJECT_KIND)
 
 include $(GNW_CORE_SDK)/Makefile
 
-# C++ of the demo: C++20 (as Second Reality++), its warnings are not ours
+# C++ of the demo: C++20 (as Second Reality++), its warnings are not ours;
+# char is signed as on the PC (the demo was written for x86)
 SR_OBJECTS := $(addprefix $(BUILD_DIR)/,$(notdir $(SR_CXX_SOURCES:.cpp=.o)))
 $(SR_OBJECTS) $(BUILD_DIR)/sr_glue.o $(BUILD_DIR)/sr_ram_data.o $(BUILD_DIR)/sr_hot.o $(BUILD_DIR)/sr_flash_refs.o \
-	$(BUILD_DIR)/sr_pack.o $(BUILD_DIR)/sr_libc.o: CXXFLAGS += -std=gnu++20 -w
+	$(BUILD_DIR)/sr_pack.o $(BUILD_DIR)/sr_libc.o: CXXFLAGS += -std=gnu++20 -w -fsigned-char
 $(CXX_OBJECTS) $(C_OBJECTS): $(GEN)/.stamp Makefile
 
 # the references to the pack are bound by sr_bind_data(), not at entry

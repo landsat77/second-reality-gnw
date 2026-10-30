@@ -18,6 +18,7 @@ first start the `.srd` is copied to the console's flash (a few seconds).
 
 - PAUSE/SET: Retro-Go menu (save, options: go to a part, loop)
 - GAME: next part, TIME: previous part
+- End scroller: A or B = back to the launcher
 
 "Save" remembers the part being played; "Resume" starts the demo again from
 that part.
@@ -51,6 +52,7 @@ secondes).
 - PAUSE/SET : menu Retro-Go (sauvegarde, options : aller à une partie, en
   boucle)
 - GAME : partie suivante, TIME : partie précédente
+- Défilement de fin : A ou B = retour au lanceur
 
 « Sauvegarder » retient la partie en cours ; « Reprendre » relance la démo à
 partir de cette partie.

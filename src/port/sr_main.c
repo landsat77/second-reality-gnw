@@ -10,7 +10,8 @@
  * - The music (st3play) is mixed ahead into a ring that the audio
  *   interrupt plays (pcm_attach); the demo follows what is heard.
  * - Pause menu: the part to play, loop; saves: the part being played.
- * - Buttons: GAME = next part, TIME = previous part.
+ * - Buttons: GAME = next part, TIME = previous part; in the end scroller,
+ *   A or B = back to the launcher.
  */
 #include <stdint.h>
 #include <stdbool.h>
@@ -476,6 +477,11 @@ static void run_input(void)
         sr_demo_jump((sr_demo_part() + SR_PART_COUNT - 1) % SR_PART_COUNT);
     game_held = game;
     time_held = time;
+
+    /* the end scroller (it never ends): A or B = back to the launcher */
+    if (sr_demo_part() == SR_PART_COUNT - 1 &&
+        (joystick.values[ODROID_INPUT_A] || joystick.values[ODROID_INPUT_B]))
+        sr_demo_quit();
 }
 
 void sr_plat_service(void)

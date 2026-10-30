@@ -231,6 +231,11 @@ void host_platform_delay_ms(uint32_t ms)
 #endif
 }
 
+uint64_t host_platform_ticks_us(void)
+{
+    return (uint64_t)SDL_GetPerformanceCounter() * 1000000u / SDL_GetPerformanceFrequency();
+}
+
 uint32_t host_platform_ticks_ms(void)
 {
 #if HOST_SDL == 3
