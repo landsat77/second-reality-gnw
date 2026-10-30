@@ -65,7 +65,11 @@ namespace U2A
         Shim::clearScreen();
 
         sprintf(Visu::tmpname, "%s.00M", u2a_scene);
+#ifdef SR_GNW
+        Visu::scene0 = Visu::scenem = Visu::readfile_copy(Visu::tmpname);
+#else
         Visu::scene0 = Visu::scenem = Visu::readfile(Visu::tmpname);
+#endif
 
         memcpy(Visu::scene0 + 16 + 192 * 3, Data::u2a_bg + 16, 64 * 3);
 

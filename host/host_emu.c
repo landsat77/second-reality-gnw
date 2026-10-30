@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 
 #include "host_compat.h"
 #include "host_platform.h"
@@ -631,13 +632,11 @@ uint8_t *odroid_overlay_cache_file_in_flash(const char *file_path, uint32_t *fil
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
-    uint8_t *data = (uint8_t *)malloc(size > 0 ? (size_t)size : 1);
-    if (!data || fread(data, 1, (size_t)size, f) != (size_t)size) {
-        fclose(f);
-        free(data);
-        return NULL;
-    }
+    /* read-only, as the flash: a write to it crashes on the PC too */
+    uint8_t *data = (uint8_t *)mmap(NULL, size > 0 ? (size_t)size : 1, PROT_READ, MAP_PRIVATE, fileno(f), 0);
     fclose(f);
+    if (data == MAP_FAILED)
+        return NULL;
     if (file_size_p)
         *file_size_p = (uint32_t)size;
     return data;

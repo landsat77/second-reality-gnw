@@ -298,3 +298,74 @@ void odroid_system_switch_app(int app)
     printf("host: back to the launcher\n");
     exit(0);
 }
+
+/* --- SR_VRAM_PROBE=1: which parts use which part of Shim::vram (debug) --- */
+#include <signal.h>
+#include <sys/mman.h>
+#include <unistd.h>
+
+extern uint8_t *sr_probe_vram_base(void);
+static uint8_t *probe_base;
+static size_t probe_size = 640 * 960;
+static long probe_page;
+static long probe_max[32];
+static char probe_touched[4096];
+
+static void probe_handler(int sig, siginfo_t *si, void *ctx)
+{
+    (void)sig;
+    (void)ctx;
+    uint8_t *a = (uint8_t *)si->si_addr;
+    if (!probe_base || a < probe_base || a >= probe_base + probe_size) {
+        signal(SIGSEGV, SIG_DFL);
+        return;
+    }
+    long off = a - probe_base;
+    int part = sr_demo_part() < 0 ? 31 : sr_demo_part();
+    if (off > probe_max[part]) {
+        probe_max[part] = off;
+        fprintf(stderr, "probe: part %d touches vram offset %ld\n", part, off);
+    }
+    uint8_t *page = (uint8_t *)((uintptr_t)a & ~(uintptr_t)(probe_page - 1));
+    mprotect(page, probe_page, PROT_READ | PROT_WRITE);
+    probe_touched[(page - probe_base) / probe_page + 1] = 1;
+}
+
+/* Shim::clearScreen() while probing: only what is accessible */
+int host_sr_vram_clear(void)
+{
+    if (!probe_base)
+        return 0;
+    long from = atol(getenv("SR_VRAM_PROBE"));
+    memset(probe_base, 0, from);
+    for (long p = 0; p < 4096; p++) {
+        if (!probe_touched[p])
+            continue;
+        uint8_t *page = probe_base + (p - 1) * probe_page;
+        uint8_t *s = page < probe_base ? probe_base : page;
+        uint8_t *e = page + probe_page > probe_base + probe_size ? probe_base + probe_size : page + probe_page;
+        memset(s, 0, e - s);
+    }
+    return 1;
+}
+
+/* protects Shim::vram above `from` bytes (called at each part start) */
+void host_sr_vram_probe(void)
+{
+    if (!getenv("SR_VRAM_PROBE"))
+        return;
+    if (!probe_base) {
+        probe_page = sysconf(_SC_PAGESIZE);
+        probe_base = sr_probe_vram_base();
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_sigaction = probe_handler;
+        sa.sa_flags = SA_SIGINFO;
+        sigaction(SIGSEGV, &sa, NULL);
+    }
+    long from = atol(getenv("SR_VRAM_PROBE"));
+    uintptr_t s = ((uintptr_t)probe_base + from + probe_page - 1) & ~(uintptr_t)(probe_page - 1);
+    uintptr_t e = ((uintptr_t)probe_base + probe_size) & ~(uintptr_t)(probe_page - 1);
+    if (e > s)
+        mprotect((void *)s, e - s, PROT_NONE);
+}

@@ -127,7 +127,11 @@ namespace U2E
 
         sprintf(Visu::tmpname, "%s.00M", u2e_scene);
 
+#ifdef SR_GNW
+        Visu::scene0 = Visu::scenem = Visu::readfile_copy(Visu::tmpname);
+#else
         Visu::scene0 = Visu::scenem = Visu::readfile(Visu::tmpname);
+#endif
 
         if (Visu::scene0[15] == 'C') Visu::city = 1;
         if (Visu::scene0[15] == 'R') Visu::city = 2;

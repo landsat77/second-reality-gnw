@@ -1,5 +1,9 @@
 #include "VISU.h"
 
+#ifdef SR_GNW
+#include "sr_pack.h"
+#endif
+
 #include "VISU_Data.h"
 
 #include "Blob/Blob.h"
@@ -73,7 +77,11 @@ namespace Visu
         rmatrix _objectsMatrix[COUNT(_objects) * 2]{};
         vlist _vlist[4096]{};
         pvlist _pvlist[2048]{};
+#ifdef SR_GNW
+        unsigned char _memPool[1024]{}; // the scene (modified); the rest is read in place
+#else
         unsigned char _memPool[160'000]{};
+#endif
 
         object * objectsPool = _objects;
         rmatrix * objectsMatrixPool = _objectsMatrix;
@@ -1665,8 +1673,28 @@ namespace Visu
         }
     }
 
+#ifdef SR_GNW
+    // a copy in RAM (a file the parts modify: the scene's palette)
+    char * readfile_copy(char * name)
+    {
+        Blob::Handle f1 = Blob::open(name);
+        Blob::seek(f1, 0L, SEEK_END);
+        const int32_t size = Blob::tell(f1);
+        if (memPool + size > _memPool + sizeof(_memPool)) sr_fatal("VISU: no memory for", name);
+        char * p = reinterpret_cast<char *>(memPool);
+        memPool += size;
+        Blob::seek(f1, 0L, SEEK_SET);
+        Blob::read(p, (size_t)size, 1, f1);
+        return p;
+    }
+#endif
+
     char * readfile(char * name)
     {
+#ifdef SR_GNW
+        // read in place in the pack (the objects and scenes are not modified)
+        if (const char * data = Blob::data(name)) return const_cast<char *>(data);
+#endif
         Blob::Handle f1 = Blob::open(name);
 
         Blob::seek(f1, 0L, SEEK_END);

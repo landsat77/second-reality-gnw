@@ -83,7 +83,7 @@ $(GEN)/sr_music.entries: tools/sr_music.cpp src/sr/Music/st3play.cpp src/sr_data
 		tools/sr_music.cpp src/sr/Music/st3play.cpp src/sr_data/Music/REALITY.FC.cpp -o $(GEN)/sr_music
 	$(V)$(GEN)/sr_music $@
 
-$(PACK_SRD): tools/sr_pack.py $(GEN)/sr_data.entries $(GEN)/sr_music.entries
+$(PACK_SRD): tools/sr_pack.py $(GEN)/.stamp $(GEN)/sr_music.entries
 	$(V)mkdir -p $(dir $@)
 	$(V)python3 tools/sr_pack.py $@ $(GEN)/sr_data.entries $(GEN)/sr_music.entries
 

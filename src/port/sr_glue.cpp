@@ -117,18 +117,28 @@ namespace
 
 bool sr_looping = false; // after the credits: the demo again (main.cpp's L)
 
+#ifdef HOST_BUILD
+extern "C" void host_sr_vram_probe(void);
+extern "C" uint8_t * sr_probe_vram_base(void)
+{
+    return Shim::vram;
+}
+#endif
+
 /* --- Second Reality++'s platform functions --- */
 
 void demo_changemode(int x, int y, float /*jsss*/)
 {
     g_width = x;
     g_height = y;
+    Shim::ringsize = 0;
     Common::reset();
 }
 
 void demo_blit()
 {
-    sr_plat_present(Shim::vram, Shim::startpixel, g_width, g_height, Shim::palette);
+    sr_plat_present(Shim::vram, Shim::VRAM_X * Shim::VRAM_Y, Shim::startpixel, Shim::ringsize, g_width, g_height,
+                    reinterpret_cast<const uint32_t *>(Shim::palette));
 }
 
 bool demo_wantstoquit()
@@ -244,6 +254,9 @@ extern "C" void sr_demo_run(int start)
         const PartInfo & p = main_parts[index];
 
         sr_overlay_load(p.group);
+#ifdef HOST_BUILD
+        host_sr_vram_probe();
+#endif
 
         if (lastMusic != p.music)
         {

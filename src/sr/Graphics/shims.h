@@ -12,7 +12,15 @@ void demo_changemode(int x, int y, float jsss = Default_JSSS);
 namespace Shim
 {
     constexpr const size_t VRAM_X = 640;
+#ifdef SR_GNW
+    // the VGA's 256 KB (two 320x400 pages), and the end scroller's ring of
+    // 401 lines of 640 (+1 line: the picture is filtered over 2 lines)
+    constexpr const size_t VRAM_Y = 402;
+    // the end scroller: the lines of the picture wrap after `ringsize` bytes
+    extern unsigned int ringsize;
+#else
     constexpr const size_t VRAM_Y = 960;
+#endif
 
     extern unsigned int palette[];
     extern unsigned int startpixel;

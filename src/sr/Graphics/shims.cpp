@@ -9,6 +9,9 @@ namespace Shim
     unsigned char vram[VRAM_X * VRAM_Y] = { 0 };
     unsigned int palette[PaletteColorCount] = { 0 };
     unsigned int startpixel = 0;
+#ifdef SR_GNW
+    unsigned int ringsize = 0;
+#endif
 
     namespace
     {
@@ -20,8 +23,15 @@ namespace Shim
         bool isFirstPart = 1;
     }
 
+#ifdef HOST_BUILD
+    extern "C" int host_sr_vram_clear(void);
+#endif
+
     void clearScreen()
     {
+#ifdef HOST_BUILD
+        if (host_sr_vram_clear()) return; // SR_VRAM_PROBE
+#endif
         CLEAR(vram);
     }
 

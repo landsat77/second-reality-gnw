@@ -125,6 +125,14 @@ namespace Blob
         return nullptr;
     }
 
+#ifdef SR_GNW
+    const char * data(const char * filename)
+    {
+        BlobInfo * b = reinterpret_cast<BlobInfo *>(open(filename));
+        return b ? reinterpret_cast<const char *>(b->ptr) : nullptr;
+    }
+#endif
+
     int read(void * buffer, int element_size, int element_count, Handle file)
     {
         BlobInfo * blob = reinterpret_cast<BlobInfo *>(file);

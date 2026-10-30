@@ -70,7 +70,12 @@ namespace EndScrl
             }
 
         memcpy(Shim::vram + 640 * (yscrl), scanbuf, 640);
+#ifndef SR_GNW
         memcpy(Shim::vram + 640 * (yscrl + 401), scanbuf, 640);
+#else
+        // the second copy: the picture wraps instead (Shim::ringsize)
+        Shim::ringsize = 640 * 401;
+#endif
 
         yscrl = (yscrl + 1) % 401;
 

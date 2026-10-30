@@ -3058,7 +3058,7 @@ namespace st3play
         return true;
     }
 
-    bool PlaySong(const uint8_t * moduleData, uint32_t dataLength, bool useInterpolationFlag, uint32_t audioFreq, uint32_t startingOrder)
+    bool PlaySong(const unsigned char * moduleData, unsigned int dataLength, bool useInterpolationFlag, unsigned int audioFreq, unsigned int startingOrder)
     {
         st3play::Close();
 
@@ -3202,7 +3202,7 @@ namespace st3play
     {
         uint16_t currentOrder = 0;
         uint16_t currentRow = 0;
-        uint32_t currentFrame = 0;
+        unsigned int currentFrame = 0;
         st3play::GetOrderRowAndFrame(&currentOrder, &currentRow, &currentFrame);
         return currentOrder;
     }
@@ -3211,16 +3211,16 @@ namespace st3play
     {
         uint16_t currentOrder = 0;
         uint16_t currentRow = 0;
-        uint32_t currentFrame = 0;
+        unsigned int currentFrame = 0;
         st3play::GetOrderRowAndFrame(&currentOrder, &currentRow, &currentFrame);
         return currentRow;
     }
 
-    uint32_t GetFrame()
+    unsigned int GetFrame()
     {
         uint16_t currentOrder = 0;
         uint16_t currentRow = 0;
-        uint32_t currentFrame = 0;
+        unsigned int currentFrame = 0;
         st3play::GetOrderRowAndFrame(&currentOrder, &currentRow, &currentFrame);
         return currentFrame;
     }
@@ -3229,7 +3229,7 @@ namespace st3play
     {
         uint16_t currentOrder = 0;
         uint16_t currentRow = 0;
-        uint32_t currentFrame = 0;
+        unsigned int currentFrame = 0;
         st3play::GetOrderRowAndFrame(&currentOrder, &currentRow, &currentFrame);
 
         uint8_t flags = 0;

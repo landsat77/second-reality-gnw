@@ -147,6 +147,9 @@ namespace Visu
     void resetscene();
 
     char * readfile(char * name);
+#ifdef SR_GNW
+    char * readfile_copy(char * name);
+#endif
 
     extern char tmpname[64];
     extern char * scene0;

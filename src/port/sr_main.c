@@ -41,6 +41,16 @@
 #include "sr_platform.h"
 #include "sr_pack.h"
 
+/* LCD frames (VBLs): the firmware's frame_counter, incremented at each vsync */
+#ifndef HOST_BUILD
+static inline uint32_t sr_frame_counter(void)
+{
+    return *(volatile uint32_t *)&frame_counter;
+}
+#else
+#define sr_frame_counter() lcd_get_frame_counter()
+#endif
+
 #define APP_ID APPID_HOMEBREW
 #define RING_SIZE 8192   /* samples, power of 2 */
 #define RING_AHEAD 4096  /* ~93 ms at 44.1 kHz */
@@ -125,7 +135,7 @@ static bool save_state(const char *path)
 /* Picture                                                            */
 /* ------------------------------------------------------------------ */
 static const uint8_t *last_vram;
-static uint32_t last_start;
+static uint32_t last_size, last_start, last_ring;
 static int last_w, last_h;
 static const uint32_t *last_pal;
 static bool dirty;
@@ -134,9 +144,19 @@ static uint16_t pal565[256];
 /* average of two RGB565 pixels */
 #define AVG565(a, b) ((uint16_t)((((a) ^ (b)) & 0xF7DEu) >> 1) + ((a) & (b)))
 
+/* line n of the picture */
+static const uint8_t *line_at(int n)
+{
+    uint32_t off = last_start + (uint32_t)n * (uint32_t)last_w;
+    if (last_ring)
+        off %= last_ring;
+    if (off + (uint32_t)last_w > last_size)
+        off = 0; /* (not seen: a part showing outside the VGA memory) */
+    return last_vram + off;
+}
+
 static void convert(uint16_t *fb)
 {
-    const uint8_t *v = last_vram + last_start;
     const int w = last_w, h = last_h;
 
     for (int i = 0; i < 256; i++) {
@@ -148,55 +168,49 @@ static void convert(uint16_t *fb)
         /* 200 -> 240 lines: y * 5 / 6, the in-between lines averaged */
         for (int y = 0; y < 240; y++) {
             int p = y * 5;
-            const uint8_t *a = v + (p / 6) * 320;
             int frac = p % 6; /* sixths */
+            int n = p / 6;
             uint16_t *d = fb + y * 320;
-            if (frac <= 1 || p / 6 >= 199) {
+            if (frac >= 5 && n < 199)
+                n++;
+            const uint8_t *a = line_at(n);
+            if (frac <= 1 || frac >= 5 || n >= 199) {
                 for (int x = 0; x < 320; x++)
                     d[x] = pal565[a[x]];
-            } else if (frac >= 5) {
-                const uint8_t *b = a + 320;
-                for (int x = 0; x < 320; x++)
-                    d[x] = pal565[b[x]];
             } else {
-                const uint8_t *b = a + 320;
+                const uint8_t *b = line_at(n + 1);
                 for (int x = 0; x < 320; x++) {
                     uint16_t ca = pal565[a[x]], cb = pal565[b[x]];
                     d[x] = AVG565(ca, cb);
                 }
             }
-            if ((y & 15) == 15)
-                wdog_refresh();
         }
     } else if (w == 320 && h == 400) {
         /* 400 -> 240 lines: two lines averaged (y * 5 / 3 and the next) */
         for (int y = 0; y < 240; y++) {
-            const uint8_t *a = v + ((y * 5) / 3) * 320;
-            const uint8_t *b = a + 320;
+            int n = (y * 5) / 3;
+            const uint8_t *a = line_at(n);
+            const uint8_t *b = line_at(n + 1);
             uint16_t *d = fb + y * 320;
             for (int x = 0; x < 320; x++) {
                 uint16_t ca = pal565[a[x]], cb = pal565[b[x]];
                 d[x] = AVG565(ca, cb);
             }
-            if ((y & 15) == 15)
-                wdog_refresh();
         }
     } else if (w == 640 && h == 350) {
         /* 640x350 -> 320x240: 2x2 pixels averaged (y * 35 / 24) */
         for (int y = 0; y < 240; y++) {
-            int sy = (y * 35) / 24;
-            if (sy > 348)
-                sy = 348;
-            const uint8_t *a = v + sy * 640;
-            const uint8_t *b = a + 640;
+            int n = (y * 35) / 24;
+            if (n > 348)
+                n = 348;
+            const uint8_t *a = line_at(n);
+            const uint8_t *b = line_at(n + 1);
             uint16_t *d = fb + y * 320;
             for (int x = 0; x < 320; x++) {
                 uint16_t c0 = AVG565(pal565[a[2 * x]], pal565[a[2 * x + 1]]);
                 uint16_t c1 = AVG565(pal565[b[2 * x]], pal565[b[2 * x + 1]]);
                 d[x] = AVG565(c0, c1);
             }
-            if ((y & 15) == 15)
-                wdog_refresh();
         }
     } else {
         memset(fb, 0, 320 * 240 * 2);
@@ -212,10 +226,13 @@ static void present_now(void)
     dirty = false;
 }
 
-void sr_plat_present(const uint8_t *vram, uint32_t start, int w, int h, const uint32_t *palette)
+void sr_plat_present(const uint8_t *vram, uint32_t size, uint32_t start, uint32_t ring, int w, int h,
+                     const uint32_t *palette)
 {
     last_vram = vram;
+    last_size = size;
     last_start = start;
+    last_ring = ring;
     last_w = w;
     last_h = h;
     last_pal = palette;
@@ -392,7 +409,7 @@ static void run_input(void)
         menu_paused = true;
         pcm_audio_set(common_emu_sound_get_volume(), 0);
     }
-    uint32_t f0 = lcd_get_frame_counter();
+    uint32_t f0 = sr_frame_counter();
 
     menu_part = sr_demo_part() < 0 ? 0 : sr_demo_part();
     part_label();
@@ -401,7 +418,7 @@ static void run_input(void)
 
     common_emu_input_loop(&joystick, game_options, &repaint);
 
-    uint32_t spent = lcd_get_frame_counter() - f0;
+    uint32_t spent = sr_frame_counter() - f0;
     if (menu_key || spent > 2) {
         /* back from the menu (or a sleep): the time spent there is not the demo's */
         vbl_base += spent;
@@ -440,7 +457,7 @@ void sr_plat_service(void)
     if (dirty && !lcd_is_swap_pending())
         present_now();
 
-    uint32_t frame = lcd_get_frame_counter();
+    uint32_t frame = sr_frame_counter();
     if (frame != last_input_frame) {
         last_input_frame = frame;
         lcd_sleep_while_swap_pending(); /* common_emu_input_loop() wants no swap pending */
@@ -451,7 +468,7 @@ void sr_plat_service(void)
 
 uint32_t sr_plat_vbl(void)
 {
-    return lcd_get_frame_counter() - vbl_base;
+    return sr_frame_counter() - vbl_base;
 }
 
 void sr_plat_wait_vbl(uint32_t vbl)
@@ -558,7 +575,7 @@ void app_main(uint8_t load_state_flag, uint8_t start_paused, int8_t save_slot)
     lcd_clear_buffers();
     audio_start_playing(SR_AUDIO_RATE / SR_REFRESH_HZ);
     ring_attach(0);
-    vbl_base = lcd_get_frame_counter();
+    vbl_base = sr_frame_counter();
     last_input_frame = vbl_base;
 
     if (load_state_flag)
