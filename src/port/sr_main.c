@@ -312,12 +312,13 @@ static void ring_attach(uint32_t pos)
 
 void sr_plat_audio_reset(void)
 {
-    /* a new song: from now on (what is in the ring is dropped) */
+    /* a new song: from now on (what is in the ring is dropped); the sound
+     * waits (silent, its position stopped) until the song's first samples
+     * are in the ring: the song is still being loaded */
     pcm_audio_set(common_emu_sound_get_volume(), 0);
     ring_tail = ring_head;
     ring_written = 0;
     pcm_audio_setpos(0);
-    pcm_audio_set(common_emu_sound_get_volume(), menu_paused ? 0 : 1);
 }
 
 uint32_t sr_plat_audio_pos(void)
@@ -335,8 +336,6 @@ void sr_plat_audio_feed(void)
         audio_missed += played - ring_written;
         ring_written = played;
     }
-    bool muted = common_emu_sound_loop_is_muted();
-    pcm_audio_set(common_emu_sound_get_volume(), (muted || menu_paused) ? 0 : 1);
     int level = (ring_head - ring_tail) & (RING_SIZE - 1);
     int want = RING_AHEAD - level;
     while (want > 0) {
@@ -351,6 +350,8 @@ void sr_plat_audio_feed(void)
         ring_written += n;
         want -= n;
     }
+    bool muted = common_emu_sound_loop_is_muted();
+    pcm_audio_set(common_emu_sound_get_volume(), (muted || menu_paused) ? 0 : 1);
 }
 
 /* after a sleep (power button): the sound again */

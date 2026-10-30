@@ -134,7 +134,9 @@ all: $(SD_DIR)/$(PACKED_BIN) $(PACK_SRD)
 clean::
 	$(V)rm -rf build/sd $(GEN) $(PACKED_BIN)
 
-.PHONY: print-PROJECT_KIND print-PACKED_BIN print-CORE_NAME print-TARGET_ELF print-TARGET_MAP print-CORE_VERSION
+.PHONY: print-PROJECT_KIND print-PACKED_BIN print-CORE_NAME print-TARGET_ELF print-TARGET_MAP print-CORE_VERSION print-DOCKER_IMAGE
+print-DOCKER_IMAGE:
+	@echo sylverb/retro-go-sd-builder:v1.5
 print-PROJECT_KIND:
 	@echo $(PROJECT_KIND)
 print-PACKED_BIN:
