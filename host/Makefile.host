@@ -11,11 +11,12 @@ HOST_SDL   ?= 2
 HOST_SCALE ?= 2
 # Native compiler (do not reuse arm-none-eabi-gcc from sdk/Makefile).
 HOST_CC    ?= cc
+HOST_CXX   ?= c++
 
 HOST_BUILD_DIR := build/host/$(PROJECT_KIND)_sdl$(HOST_SDL)
 
 ifeq ($(PROJECT_KIND),homebrew)
-HOST_BIN := ExampleHB_host
+HOST_BIN := SecondReality_host
 else
 HOST_BIN := $(CORE_NAME)_host
 endif
@@ -58,35 +59,53 @@ HOST_INCLUDES := \
 	-I$(HOST_INC_ROOT)/Core/Src/porting/lib/FatFs \
 	$(HOST_PKG_CFLAGS)
 
-HOST_CFLAGS := -O2 -g -Wall -Wextra -std=c11 \
+HOST_CFLAGS := -O2 -g -Wall -Wextra -std=gnu11 $(CORE_C_INCLUDES) \
 	-include host/stubs/config.h \
 	$(HOST_DEFS) $(HOST_INCLUDES)
 
 HOST_SRCS := \
 	$(CORE_C_SOURCES) \
+	host/host_sr.c \
 	host/crc32.c \
 	host/host_main.c \
 	host/host_platform.c \
 	host/host_emu.c \
 	host/host_i18n.c
 
-HOST_OBJS := $(addprefix $(HOST_BUILD_DIR)/,$(HOST_SRCS:.c=.o))
+HOST_CXX_SRCS := $(filter-out $(GEN)/% $(GNW_CORE_SDK)/%,$(CORE_CXX_SOURCES))
+HOST_GEN_SRCS := $(filter $(GEN)/%,$(CORE_CXX_SOURCES))
+HOST_CXXFLAGS := -O2 -g -std=gnu++20 -w $(HOST_DEFS) $(HOST_INCLUDES) $(CORE_C_INCLUDES)
+
+HOST_OBJS := $(addprefix $(HOST_BUILD_DIR)/,$(HOST_SRCS:.c=.o)) \
+	$(addprefix $(HOST_BUILD_DIR)/,$(HOST_CXX_SRCS:.cpp=.o)) \
+	$(addprefix $(HOST_BUILD_DIR)/,$(HOST_GEN_SRCS:.cpp=.o))
 HOST_DEPS := $(HOST_OBJS:.o=.d)
 
 .PHONY: host host_clean
 
-host: $(HOST_BIN)
+host: $(HOST_BIN) $(PACK_SRD)
 	$(V)$(ECHO) "[ HOST ]" $(HOST_BIN) "(SDL$(HOST_SDL), PROJECT_KIND=$(PROJECT_KIND))"
 
 $(HOST_BIN): $(HOST_OBJS)
 	$(V)$(ECHO) [ LD HOST ] $@
-	$(V)$(HOST_CC) -o $@ $(HOST_OBJS) $(HOST_PKG_LIBS)
+	$(V)$(HOST_CXX) -o $@ $(HOST_OBJS) $(HOST_PKG_LIBS) -lm
 
 # Explicit pattern under HOST_BUILD_DIR only (do not collide with sdk ARM rules).
-$(HOST_BUILD_DIR)/src/%.o: src/%.c
+$(HOST_BUILD_DIR)/src/%.o: src/%.c $(GEN)/.stamp
 	$(V)mkdir -p $(dir $@)
 	$(V)$(ECHO) [ CC HOST ] $<
 	$(V)$(HOST_CC) $(HOST_CFLAGS) -MMD -MP -MF"$(@:%.o=%.d)" -c $< -o $@
+
+$(HOST_BUILD_DIR)/src/%.o: src/%.cpp $(GEN)/.stamp
+	$(V)mkdir -p $(dir $@)
+	$(V)$(ECHO) [ CXX HOST ] $<
+	$(V)$(HOST_CXX) $(HOST_CXXFLAGS) -MMD -MP -MF"$(@:%.o=%.d)" -c $< -o $@
+
+$(HOST_BUILD_DIR)/$(GEN)/%.o: $(GEN)/%.cpp $(GEN)/.stamp
+	$(V)mkdir -p $(dir $@)
+	$(V)$(ECHO) [ CXX HOST ] $<
+	$(V)$(HOST_CXX) $(HOST_CXXFLAGS) -c $< -o $@
+	$(V)if [ "$(notdir $<)" = sr_flash_refs.cpp ]; then objcopy --rename-section .init_array=sr_init_array,alloc,load,data $@; fi
 
 $(HOST_BUILD_DIR)/host/%.o: host/%.c
 	$(V)mkdir -p $(dir $@)
@@ -95,7 +114,7 @@ $(HOST_BUILD_DIR)/host/%.o: host/%.c
 
 host_clean:
 	$(V)rm -rf build/host
-	$(V)rm -f $(CORE_NAME)_host ExampleHB_host
+	$(V)rm -f $(CORE_NAME)_host SecondReality_host
 
 clean:: host_clean
 

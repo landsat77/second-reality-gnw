@@ -188,8 +188,8 @@ void gw_core_bridge_init(void)
     memset(&host_pad, 0, sizeof(host_pad));
     memset(&host_active_file, 0, sizeof(host_active_file));
 #if defined(PROJECT_KIND_HOMEBREW)
-    strncpy(host_active_file.name, "ExampleHB.bin", sizeof(host_active_file.name) - 1);
-    strncpy(host_active_file.path, "ExampleHB.bin", sizeof(host_active_file.path) - 1);
+    strncpy(host_active_file.name, "SecondReality.bin", sizeof(host_active_file.name) - 1);
+    strncpy(host_active_file.path, "SecondReality.bin", sizeof(host_active_file.path) - 1);
 #else
     strncpy(host_active_file.name, "(no rom)", sizeof(host_active_file.name) - 1);
 #endif
@@ -277,13 +277,17 @@ void *lcd_get_inactive_buffer(void)
     return active_framebuffer ? framebuffer1 : framebuffer2;
 }
 
+void host_sr_shown(const uint16_t *fb);
+void host_sr_swapped(void);
+
 void lcd_swap(void)
 {
     host_poll_events();
+    host_sr_shown((const uint16_t *)lcd_get_active_buffer());
     host_platform_present_rgb565((const uint16_t *)lcd_get_active_buffer(),
                                  GW_LCD_WIDTH, GW_LCD_HEIGHT);
     active_framebuffer ^= 1;
-    frame_counter++;
+    host_sr_swapped();
     host_maybe_quit();
 }
 
@@ -619,11 +623,24 @@ void odroid_overlay_alert(const char *text) { (void)text; }
 uint8_t *odroid_overlay_cache_file_in_flash(const char *file_path, uint32_t *file_size_p,
                                             bool byte_swap)
 {
-    (void)file_path;
+    /* the whole file in memory (the device copies it to the external flash) */
     (void)byte_swap;
+    FILE *f = fopen(file_path, "rb");
+    if (!f)
+        return NULL;
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint8_t *data = (uint8_t *)malloc(size > 0 ? (size_t)size : 1);
+    if (!data || fread(data, 1, (size_t)size, f) != (size_t)size) {
+        fclose(f);
+        free(data);
+        return NULL;
+    }
+    fclose(f);
     if (file_size_p)
-        *file_size_p = 0;
-    return NULL;
+        *file_size_p = (uint32_t)size;
+    return data;
 }
 
 size_t odroid_overlay_cache_file_in_ram(const char *file_path, uint8_t *dest_address)
