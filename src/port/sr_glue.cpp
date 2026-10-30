@@ -270,6 +270,7 @@ extern "C" void sr_demo_run(int start)
         g_part = index;
         const PartInfo & p = main_parts[index];
 
+        sr_plat_part_start(index);
         sr_overlay_load(p.group);
 #ifdef HOST_BUILD
         host_sr_vram_probe();

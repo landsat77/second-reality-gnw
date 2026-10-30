@@ -213,9 +213,45 @@ void host_sr_service(void)
     check_end();
 }
 
+/* SR_CPU=1: CPU time of the PC per part (outside the waits for the VBL) */
+#include <time.h>
+static double cpu_part[32], cpu_wait_start = -1;
+static uint64_t vt_part[32];
+static int cpu_last_part = -1;
+static uint64_t cpu_last_vt;
+static double cpu_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
+    return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
+}
+static void cpu_report(void)
+{
+    for (int i = 0; i < 32; i++)
+        if (vt_part[i])
+            fprintf(stderr, "cpu: part %2d %s: %.1f ms of CPU per second (%.1f s)\n", i, sr_part_name(i),
+                    cpu_part[i] * 1e6 / vt_part[i], vt_part[i] / 1e6);
+}
+
 void host_sr_idle(void)
 {
     init();
+    static double busy_from = -1;
+    if (getenv("SR_CPU")) {
+        double now = cpu_ms();
+        int part = sr_demo_part() < 0 ? 31 : sr_demo_part();
+        if (busy_from >= 0)
+            cpu_part[part] += now - busy_from;
+        if (cpu_last_part >= 0)
+            vt_part[cpu_last_part] += vtime_us - cpu_last_vt;
+        cpu_last_part = part;
+        cpu_last_vt = vtime_us;
+        static int registered;
+        if (!registered) {
+            atexit(cpu_report);
+            registered = 1;
+        }
+    }
     if (fast) {
         /* to the next VBL */
         uint64_t f = now_us() * SR_REFRESH_HZ / 1000000 + 1;
@@ -226,6 +262,8 @@ void host_sr_idle(void)
         host_platform_delay_ms(1);
     }
     pcm_run();
+    if (getenv("SR_CPU"))
+        busy_from = cpu_ms();
     check_end();
 }
 

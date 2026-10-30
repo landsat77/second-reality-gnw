@@ -59,6 +59,14 @@ static inline uint32_t sr_frame_counter(void)
 extern bool sr_looping;
 
 static odroid_gamepad_state_t joystick;
+
+/* statistics (stats_part()) */
+#define DWT_CYCCNT (*(volatile uint32_t *)0xE0001004)
+static uint64_t stat_idle_cycles;
+static uint32_t stat_cycles0, stat_vbl0, stat_presents, stat_longest, stat_last_present;
+static int stat_part = -1;
+static char stat_log_path[200];
+static uint32_t audio_missed;
 static uint32_t vbl_base;          /* LCD frames of the menus etc.: not demo time */
 static uint32_t last_input_frame;
 static int in_service;
@@ -153,6 +161,42 @@ static const uint8_t *line_at(int n)
     return pic.vram + off;
 }
 
+/* lines of the picture converted to RGB565 (two kept: a line is often used
+ * by two lines of the LCD) */
+static uint16_t line_rgb[2][640] __attribute__((aligned(4)));
+static int line_n[2] = { -1, -1 };
+static int line_next;
+
+static const uint16_t *line_565(int n)
+{
+    if (line_n[0] == n)
+        return line_rgb[0];
+    if (line_n[1] == n)
+        return line_rgb[1];
+    int k = line_next;
+    line_next ^= 1;
+    line_n[k] = n;
+    const uint8_t *s = line_at(n);
+    uint32_t *d = (uint32_t *)line_rgb[k];
+    const uint16_t *p = pal565;
+    for (int i = 0; i < pic.w; i += 4, s += 4, d += 2) {
+        d[0] = p[s[0]] | (uint32_t)p[s[1]] << 16;
+        d[1] = p[s[2]] | (uint32_t)p[s[3]] << 16;
+    }
+    return line_rgb[k];
+}
+
+/* two RGB565 pixels at once */
+#define AVG565x2(a, b) (((((a) ^ (b)) & 0xF7DEF7DEu) >> 1) + ((a) & (b)))
+
+static void avg_line(const uint16_t *a, const uint16_t *b, uint16_t *d)
+{
+    const uint32_t *a32 = (const uint32_t *)a, *b32 = (const uint32_t *)b;
+    uint32_t *d32 = (uint32_t *)d;
+    for (int x = 0; x < 160; x++)
+        d32[x] = AVG565x2(a32[x], b32[x]);
+}
+
 static void convert(uint16_t *fb)
 {
     const int w = pic.w, h = pic.h;
@@ -161,6 +205,7 @@ static void convert(uint16_t *fb)
         uint32_t c = pic.palette[i];
         pal565[i] = (uint16_t)(((c >> 8) & 0xF800) | ((c >> 5) & 0x07E0) | ((c >> 3) & 0x001F));
     }
+    line_n[0] = line_n[1] = -1;
 
     if (w == 320 && h == 200) {
         /* 200 -> 240 lines: y * 5 / 6, the in-between lines averaged */
@@ -171,29 +216,16 @@ static void convert(uint16_t *fb)
             uint16_t *d = fb + y * 320;
             if (frac >= 5 && n < 199)
                 n++;
-            const uint8_t *a = line_at(n);
-            if (frac <= 1 || frac >= 5 || n >= 199) {
-                for (int x = 0; x < 320; x++)
-                    d[x] = pal565[a[x]];
-            } else {
-                const uint8_t *b = line_at(n + 1);
-                for (int x = 0; x < 320; x++) {
-                    uint16_t ca = pal565[a[x]], cb = pal565[b[x]];
-                    d[x] = AVG565(ca, cb);
-                }
-            }
+            if (frac <= 1 || frac >= 5 || n >= 199)
+                memcpy(d, line_565(n), 640);
+            else
+                avg_line(line_565(n), line_565(n + 1), d);
         }
     } else if (w == 320 && h == 400) {
         /* 400 -> 240 lines: two lines averaged (y * 5 / 3 and the next) */
         for (int y = 0; y < 240; y++) {
             int n = (y * 5) / 3;
-            const uint8_t *a = line_at(n);
-            const uint8_t *b = line_at(n + 1);
-            uint16_t *d = fb + y * 320;
-            for (int x = 0; x < 320; x++) {
-                uint16_t ca = pal565[a[x]], cb = pal565[b[x]];
-                d[x] = AVG565(ca, cb);
-            }
+            avg_line(line_565(n), line_565(n + 1), fb + y * 320);
         }
     } else if (w == 640 && h == 350) {
         /* 640x350 -> 320x240: 2x2 pixels averaged (y * 35 / 24) */
@@ -201,12 +233,12 @@ static void convert(uint16_t *fb)
             int n = (y * 35) / 24;
             if (n > 348)
                 n = 348;
-            const uint8_t *a = line_at(n);
-            const uint8_t *b = line_at(n + 1);
+            const uint16_t *a = line_565(n);
+            const uint16_t *b = line_565(n + 1);
             uint16_t *d = fb + y * 320;
             for (int x = 0; x < 320; x++) {
-                uint16_t c0 = AVG565(pal565[a[2 * x]], pal565[a[2 * x + 1]]);
-                uint16_t c1 = AVG565(pal565[b[2 * x]], pal565[b[2 * x + 1]]);
+                uint16_t c0 = AVG565(a[2 * x], a[2 * x + 1]);
+                uint16_t c1 = AVG565(b[2 * x], b[2 * x + 1]);
                 d[x] = AVG565(c0, c1);
             }
         }
@@ -217,6 +249,11 @@ static void convert(uint16_t *fb)
 
 static void present_now(void)
 {
+    uint32_t now = sr_plat_vbl();
+    if (stat_presents && now - stat_last_present > stat_longest)
+        stat_longest = now - stat_last_present;
+    stat_last_present = now;
+    stat_presents++;
     uint16_t *fb = lcd_get_active_buffer();
     convert(fb);
     common_ingame_overlay();
@@ -263,7 +300,6 @@ static void *screenshot(void)
 static int16_t *ring;
 static volatile uint16_t ring_head, ring_tail; /* written / read (interrupt) */
 static uint32_t ring_written;                  /* samples written since the reset */
-static uint32_t audio_missed;
 
 static void ring_attach(uint32_t pos)
 {
@@ -314,6 +350,14 @@ void sr_plat_audio_feed(void)
         ring_written += n;
         want -= n;
     }
+}
+
+/* after a sleep (power button): the sound again */
+static void sleep_wake(void)
+{
+    odroid_audio_init(SR_AUDIO_RATE);
+    audio_start_playing(SR_AUDIO_RATE / SR_REFRESH_HZ);
+    ring_attach(pcm_audio_pos());
 }
 
 /* ------------------------------------------------------------------ */
@@ -414,6 +458,7 @@ static void run_input(void)
     if (menu_key || spent > 2) {
         /* back from the menu (or a sleep): the time spent there is not the demo's */
         vbl_base += spent;
+        printf("sr: menu/sleep %lu VBL (menu key %d)\n", (unsigned long)spent, menu_key);
         menu_paused = false;
         ring_attach(pcm_audio_pos()); /* the sound was perhaps restarted */
         if (have_pic) {
@@ -470,9 +515,54 @@ void sr_plat_wait_vbl(uint32_t vbl)
 #ifdef HOST_BUILD
         host_sr_idle();
 #else
+        uint32_t c0 = DWT_CYCCNT;
         __WFI(); /* the LCD, the audio DMA or SysTick wake us up */
+        stat_idle_cycles += DWT_CYCCNT - c0;
 #endif
     }
+}
+
+/* ------------------------------------------------------------------ */
+/* Statistics: a line per part in <saves>/log.txt                     */
+/* ------------------------------------------------------------------ */
+static void stats_part(int part)
+{
+    uint32_t vbls = sr_plat_vbl() - stat_vbl0;
+    if (stat_part >= 0 && vbls > 0) {
+        char line[200];
+        uint32_t secs10 = vbls * 10 / SR_REFRESH_HZ;
+#ifndef HOST_BUILD
+        uint32_t cycles = DWT_CYCCNT - stat_cycles0;
+        uint32_t idle = cycles ? (uint32_t)(stat_idle_cycles * 100 / cycles) : 0;
+#else
+        uint32_t idle = 0;
+#endif
+        snprintf(line, sizeof(line), "part %2d %-18s %3lu.%lu s, %lu pictures (%lu/s), longest frame %lu VBL, idle %lu%%, sound missed %lu\n",
+                 stat_part, sr_part_name(stat_part), (unsigned long)(secs10 / 10), (unsigned long)(secs10 % 10),
+                 (unsigned long)stat_presents, (unsigned long)(stat_presents * SR_REFRESH_HZ / vbls),
+                 (unsigned long)stat_longest, (unsigned long)idle, (unsigned long)audio_missed);
+        printf("sr: %s", line);
+        /* a line at a time (no fflush in the firmware's ABI) */
+        FILE *f = stat_log_path[0] ? fopen(stat_log_path, "a") : NULL;
+        if (f) {
+            fputs(line, f);
+            fclose(f);
+        }
+    }
+    stat_part = part;
+    stat_vbl0 = sr_plat_vbl();
+    stat_presents = 0;
+    stat_longest = 0;
+    stat_idle_cycles = 0;
+    audio_missed = 0;
+#ifndef HOST_BUILD
+    stat_cycles0 = DWT_CYCCNT;
+#endif
+}
+
+void sr_plat_part_start(int part)
+{
+    stats_part(part);
 }
 
 /* ------------------------------------------------------------------ */
@@ -521,12 +611,15 @@ void app_main(uint8_t load_state_flag, uint8_t start_paused, int8_t save_slot)
 {
 #ifndef HOST_BUILD
     gw_core_bridge_init();
+    /* cycle counter for the statistics */
+    *(volatile uint32_t *)0xE000EDFC |= 1u << 24; /* DEMCR.TRCENA */
+    *(volatile uint32_t *)0xE0001000 |= 1u;       /* DWT_CTRL.CYCCNTENA */
 #endif
     (void)start_paused;
     printf("Second Reality start\n");
 
     odroid_system_init(APP_ID, SR_AUDIO_RATE);
-    odroid_system_emu_init(&load_state, &save_state, &screenshot, NULL, NULL, NULL, NULL);
+    odroid_system_emu_init(&load_state, &save_state, &screenshot, NULL, &sleep_wake, NULL, NULL);
     setup_game_options();
 
     static char pack_path[256];
@@ -545,6 +638,12 @@ void app_main(uint8_t load_state_flag, uint8_t start_paused, int8_t save_slot)
         rg_storage_mkdir(save_dir);
         snprintf(options_path, sizeof(options_path), "%s/gnw_options.bin", save_dir);
         options_load();
+        snprintf(stat_log_path, sizeof(stat_log_path), "%s/log.txt", save_dir);
+        FILE *f = fopen(stat_log_path, "w");
+        if (f) {
+            fprintf(f, "Second Reality %s\n", SR_VERSION);
+            fclose(f);
+        }
     }
 
     FILE *probe = fopen(pack_path, "rb");
@@ -574,6 +673,7 @@ void app_main(uint8_t load_state_flag, uint8_t start_paused, int8_t save_slot)
         odroid_system_emu_load_state(save_slot);
 
     sr_demo_run(0);
+    stats_part(-1);
 
     /* the end: back to the launcher */
     pcm_audio_enable(0);

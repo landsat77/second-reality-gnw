@@ -34,6 +34,9 @@ typedef struct {
 } sr_picture_t;
 void sr_plat_present(const sr_picture_t *picture);
 
+/* a part starts (statistics) */
+void sr_plat_part_start(int part);
+
 /* samples heard since sr_plat_audio_reset() (SR_AUDIO_RATE) */
 uint32_t sr_plat_audio_pos(void);
 void sr_plat_audio_reset(void);

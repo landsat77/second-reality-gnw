@@ -11,8 +11,9 @@ PROJECT_KIND := homebrew
 CORE_NAME  := sr
 CORE_ENTRY := app_main
 HB_NAME    := Second Reality
-PACKED_BIN := build/sd/homebrews/SecondReality.bin
-PACK_SRD   := build/sd/homebrews/SecondReality.srd
+PACKED_BIN := SecondReality.bin
+SD_DIR     := build/sd/homebrews
+PACK_SRD   := $(SD_DIR)/SecondReality.srd
 
 SR_AUDIO_RATE ?= 44100
 
@@ -41,7 +42,8 @@ CORE_C_SOURCES := \
 	src/port/sr_overlay.c
 
 CORE_C_INCLUDES := -Isrc/sr -Isrc/sr/Music -Isrc/port -I$(GEN)
-CORE_C_DEFS := -DPROJECT_KIND_HOMEBREW=1 -DSR_GNW=1 -DSR_AUDIO_RATE=$(SR_AUDIO_RATE)
+CORE_VERSION ?= $(shell git describe --tags --dirty 2>/dev/null || echo NOTAG)
+CORE_C_DEFS := -DPROJECT_KIND_HOMEBREW=1 -DSR_GNW=1 -DSR_AUDIO_RATE=$(SR_AUDIO_RATE) -DSR_VERSION=\"$(CORE_VERSION)\"
 OPT := -O2
 CORE_LDSCRIPT := src/port/sr_core.ld
 CORE_ELF_EXTRA_DEPS := $(GEN)/sr_overlays.ld
@@ -97,34 +99,39 @@ $(BUILD_DIR)/sr_overlay.o: $(GEN)/sr_overlays.ld
 #######################################
 # packing
 #######################################
-CORE_VERSION ?= $(shell git describe --tags --dirty 2>/dev/null || echo NOTAG)
 
 PACK_HOMEBREW := $(GNW_CORE_SDK)/tools/pack_homebrew.py
-GEN_COVER     := scripts/gen_homebrew_cover.py
+MAKE_COVER    := scripts/make_cover.py
+COVER_SRC     := src/assets/cover.png
 COVER_JPG     := $(BUILD_DIR)/cover.jpg
 
 .PHONY: pack cover
 cover: $(COVER_JPG)
 
-$(COVER_JPG): $(GEN_COVER) | $(BUILD_DIR)
+$(COVER_JPG): $(MAKE_COVER) $(COVER_SRC) | $(BUILD_DIR)
 	$(V)$(ECHO) "[ COVER ] $(COVER_JPG)"
-	$(V)python3 $(GEN_COVER) --out $(COVER_JPG) --title "$(HB_NAME)" --width 128 --height 96
+	$(V)python3 $(MAKE_COVER) --in $(COVER_SRC) --out $(COVER_JPG)
 
 $(PACKED_BIN): $(TARGET_BIN) $(COVER_JPG)
 	$(V)$(ECHO) [ PACK GWHB ] $(PACKED_BIN) version=$(CORE_VERSION)
-	$(V)mkdir -p $(dir $@)
 	$(V)python3 $(PACK_HOMEBREW) \
 		--elf $(TARGET_ELF) --bin $(TARGET_BIN) \
 		--name "$(HB_NAME)" --version "$(CORE_VERSION)" \
 		--cover $(COVER_JPG) \
 		--out $(PACKED_BIN)
 
+# the SD card's files: build/sd/homebrews/SecondReality.bin + .srd
+$(SD_DIR)/$(PACKED_BIN): $(PACKED_BIN)
+	$(V)mkdir -p $(SD_DIR)
+	$(V)cp $(PACKED_BIN) $@
+	$(V)$(ECHO) "[ SD ] $(SD_DIR)/$(PACKED_BIN) + SecondReality.srd"
+
 pack: $(PACK_SRD)
 
-all: $(PACKED_BIN) $(PACK_SRD)
+all: $(SD_DIR)/$(PACKED_BIN) $(PACK_SRD)
 
 clean::
-	$(V)rm -rf build/sd $(GEN)
+	$(V)rm -rf build/sd $(GEN) $(PACKED_BIN)
 
 .PHONY: print-PROJECT_KIND print-PACKED_BIN print-CORE_NAME print-TARGET_ELF print-TARGET_MAP print-CORE_VERSION
 print-PROJECT_KIND:
@@ -144,3 +151,10 @@ print-CORE_VERSION:
 # PC build
 #######################################
 include host/Makefile.host
+
+#######################################
+# test: the pictures of the PC build against Second Reality++'s
+#######################################
+.PHONY: check
+check: host
+	$(V)python3 tests/check.py $(HOST_BIN) $(PACK_SRD)

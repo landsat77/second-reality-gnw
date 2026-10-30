@@ -285,8 +285,9 @@ void lcd_swap(void)
 {
     host_poll_events();
     host_sr_shown((const uint16_t *)lcd_get_active_buffer());
-    host_platform_present_rgb565((const uint16_t *)lcd_get_active_buffer(),
-                                 GW_LCD_WIDTH, GW_LCD_HEIGHT);
+    if (!getenv("SR_FAST"))
+        host_platform_present_rgb565((const uint16_t *)lcd_get_active_buffer(),
+                                     GW_LCD_WIDTH, GW_LCD_HEIGHT);
     active_framebuffer ^= 1;
     host_sr_swapped();
     host_maybe_quit();
@@ -846,8 +847,25 @@ void *dtc_malloc(size_t size) { return malloc(size); }
 void *dtc_calloc(size_t count, size_t size) { return calloc(count, size); }
 size_t dtc_get_free_size(void) { return 64 * 1024; }
 
+/* SR_WDOG_MS=n: reports the gaps of more than n ms (CPU time of the PC)
+ * between two watchdog refreshes (the console's window watchdog) */
+#include <time.h>
+int sr_demo_part(void);
 void wdog_refresh(void)
 {
+    static double last, limit = -1;
+    static int last_part = -2;
+    if (limit < 0)
+        limit = getenv("SR_WDOG_MS") ? atof(getenv("SR_WDOG_MS")) : 0;
+    if (limit > 0) {
+        struct timespec ts;
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
+        double now = ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
+        if (last > 0 && now - last > limit && sr_demo_part() == last_part)
+            fprintf(stderr, "wdog: %.1f ms without refresh (part %d)\n", now - last, sr_demo_part());
+        last = now;
+        last_part = sr_demo_part();
+    }
     host_poll_events();
     host_maybe_quit();
 }
