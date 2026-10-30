@@ -3,3 +3,4 @@ sr_qemu.elf
 *.srd
 SecondReality.bin
 qemu_env.txt
+qemu_hash.txt
