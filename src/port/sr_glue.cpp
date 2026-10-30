@@ -132,13 +132,30 @@ void demo_changemode(int x, int y, float /*jsss*/)
     g_width = x;
     g_height = y;
     Shim::ringsize = 0;
+    Shim::dispstride = 0;
     Common::reset();
 }
 
 void demo_blit()
 {
-    sr_plat_present(Shim::vram, Shim::VRAM_X * Shim::VRAM_Y, Shim::startpixel, Shim::ringsize, g_width, g_height,
-                    reinterpret_cast<const uint32_t *>(Shim::palette));
+    sr_picture_t p;
+    p.vram = Shim::vram;
+    p.size = Shim::VRAM_X * Shim::VRAM_Y;
+    p.start = Shim::startpixel;
+    p.stride = g_width;
+    p.ring = Shim::ringsize;
+    p.w = g_width;
+    p.h = g_height;
+    p.dbl = 0;
+    p.palette = reinterpret_cast<const uint32_t *>(Shim::palette);
+    if (Shim::dispstride)
+    {
+        // a part showing its own layout of the VGA memory (the shutdown)
+        p.start = Shim::dispstart;
+        p.stride = Shim::dispstride;
+        p.dbl = Shim::dispdouble;
+    }
+    sr_plat_present(&p);
 }
 
 bool demo_wantstoquit()
@@ -262,6 +279,13 @@ extern "C" void sr_demo_run(int start)
         {
             lastMusic = p.music;
             Music::start(p.music, p.musicStartOrder);
+        }
+
+        if (index <= 14)
+        {
+            // parts 0-13 show one page: the rest of the VGA memory is their
+            // scratch memory (Shim::SCRATCH), clean for them and for part 14
+            memset(Shim::vram + Shim::SCRATCH_OFFSET, 0, Shim::SCRATCH_SIZE);
         }
 
         demo_changemode(p.width, p.height);

@@ -22,11 +22,17 @@ void sr_plat_wait_vbl(uint32_t vbl);
 /* watchdog, sound, buttons, pause menu (cheap if called often) */
 void sr_plat_service(void);
 
-/* the picture: VGA memory (8 bits, `size` bytes) from `start`, w x h
- * (320x200, 320x400 or 640x350), the palette (0x00RRGGBB); if `ring`, the
- * lines wrap after `ring` bytes (the end scroller) */
-void sr_plat_present(const uint8_t *vram, uint32_t size, uint32_t start, uint32_t ring, int w, int h,
-                     const uint32_t *palette);
+/* the picture: VGA memory (8 bits, `size` bytes), w x h (320x200, 320x400
+ * or 640x350) from `start`, a line every `stride` bytes (each line twice if
+ * `dbl`); if `ring`, the lines wrap after `ring` bytes (the end scroller);
+ * the palette (0x00RRGGBB) */
+typedef struct {
+    const uint8_t *vram;
+    uint32_t size, start, stride, ring;
+    int w, h, dbl;
+    const uint32_t *palette;
+} sr_picture_t;
+void sr_plat_present(const sr_picture_t *picture);
 
 /* samples heard since sr_plat_audio_reset() (SR_AUDIO_RATE) */
 uint32_t sr_plat_audio_pos(void);

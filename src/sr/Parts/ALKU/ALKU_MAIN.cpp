@@ -12,7 +12,17 @@ namespace Alku
         const char * alku_fonaorder = "ABCDEFGHIJKLMNOPQRSTUVWXabcdefghijklmnopqrstuvwxyz0123456789"
                                       "!?,.:\x8f\x8f()+-*='\x8f\x99";
 
+#ifdef SR_GNW
+        // font and tbuf: in the VGA memory not shown (Shim::SCRATCH)
+        using font_t = char[FONT_STRIDE * 31 + 1500 * 5 * 2];
+        using tbuf_t = char[186][352];
+        SR_SCRATCH_CHECK(font_t, 0);
+        SR_SCRATCH_CHECK(tbuf_t, sizeof(font_t));
+#define font SR_SCRATCH(font_t, 0)
+#define tbuf SR_SCRATCH(tbuf_t, sizeof(font_t))
+#else
         char font[FONT_STRIDE * 31 + 1500 * 5 * 2]{};
+#endif
 
         unsigned char alku_planar_vram[352 * 500]{};
 
@@ -32,7 +42,9 @@ namespace Alku
         int alku_fonaw[256]{};
 
         short alku_dtau[30000]{};
+#ifndef SR_GNW
         char tbuf[186][352]{};
+#endif
 
         int a = 0, p = 0, alku_tptr = 0;
     }

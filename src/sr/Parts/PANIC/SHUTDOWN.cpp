@@ -12,7 +12,9 @@ namespace Shutdown
 {
     namespace
     {
-        char kuva[65000]{};
+#ifndef SR_GNW
+        char kuva[65000]{}; // (not used)
+#endif
 
         char kuvapal[PaletteByteCount]{};
         char pal[PaletteByteCount]{};
@@ -21,7 +23,15 @@ namespace Shutdown
         unsigned int shutdown_offset = 0;
         unsigned int shutdown_scrwidth = 640;
         unsigned char shutdown_scandoubling = 0;
+#ifdef SR_GNW
+        // Game & Watch: its work memory is the VGA memory (it uses 256000
+        // bytes of it); the picture is shown from it directly (Shim::disp*)
+        // instead of being copied to the first 128000 bytes
+        static_assert(640 * 400 <= Shim::VRAM_X * Shim::VRAM_Y, "shutdown_vram");
+#define shutdown_vram (Shim::vram)
+#else
         unsigned char shutdown_vram[640 * 800]{};
+#endif
     }
 
     void copyline(int from, int to, int count)
@@ -35,6 +45,12 @@ namespace Shutdown
 
     void resolve_shutdown_vram()
     {
+#ifdef SR_GNW
+        Shim::dispstart = shutdown_offset;
+        Shim::dispstride = shutdown_scrwidth;
+        Shim::dispdouble = shutdown_scandoubling;
+        return;
+#endif
         unsigned char * src = shutdown_vram + shutdown_offset;
         unsigned char * dst = Shim::vram;
         unsigned int height = shutdown_scandoubling ? SCREEN_HEIGHT : DOUBlE_SCREEN_HEIGHT;
@@ -139,9 +155,33 @@ namespace Shutdown
         }
     }
 
+#ifdef SR_GNW
+    // the picture shown at the end, where the next part expects it (the
+    // first 128000 bytes, 320 per line): resolve_shutdown_vram() of
+    // upstream, in place (each line is read before it is written over)
+    void resolve_in_place()
+    {
+        unsigned int height = shutdown_scandoubling ? SCREEN_HEIGHT : DOUBlE_SCREEN_HEIGHT;
+        unsigned char * dst = Shim::vram;
+        for (unsigned int i = 0; i < height; i++)
+        {
+            memmove(dst, Shim::vram + shutdown_offset + i * shutdown_scrwidth, SCREEN_WIDTH);
+            dst += SCREEN_WIDTH;
+            if (shutdown_scandoubling)
+            {
+                memmove(dst, dst - SCREEN_WIDTH, SCREEN_WIDTH);
+                dst += SCREEN_WIDTH;
+            }
+        }
+        Shim::dispstride = 0;
+    }
+#endif
+
     void main()
     {
+#ifndef SR_GNW
         CLEAR(kuva);
+#endif
         CLEAR(kuvapal);
         CLEAR(pal);
         CLEAR(fadepals);
@@ -149,18 +189,36 @@ namespace Shutdown
         shutdown_offset = 0;
         shutdown_scrwidth = 640;
         shutdown_scandoubling = 0;
+#ifdef SR_GNW
+        // the picture (320x400 at the start of the VGA memory) to the right
+        // half of 640-byte lines, from the last line (in place)
+        for (int y = DOUBlE_SCREEN_HEIGHT - 1; y >= 0; y--)
+        {
+            memmove(shutdown_vram + y * 640 + SCREEN_WIDTH, Shim::vram + y * SCREEN_WIDTH, SCREEN_WIDTH);
+            memset(shutdown_vram + y * 640, 0, SCREEN_WIDTH);
+        }
+        memset(shutdown_vram + 640 * 400, 0, Shim::VRAM_X * Shim::VRAM_Y - 640 * 400);
+        // until the first resolve_shutdown_vram(): the picture as it was
+        Shim::dispstart = SCREEN_WIDTH;
+        Shim::dispstride = 640;
+        Shim::dispdouble = 0;
+#else
         CLEAR(shutdown_vram);
 
         for (int y = 0; y < DOUBlE_SCREEN_HEIGHT; y++)
         {
             memcpy(shutdown_vram + y * 640 + SCREEN_WIDTH, Shim::vram + y * SCREEN_WIDTH, SCREEN_WIDTH);
         }
+#endif
 
         Common::getpalarea(kuvapal);
 
         shutdown_scrwidth = 640;
 
         shutdown();
+#ifdef SR_GNW
+        resolve_in_place();
+#endif
     }
 
 }

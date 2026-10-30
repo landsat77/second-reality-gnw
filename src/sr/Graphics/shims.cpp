@@ -11,6 +11,7 @@ namespace Shim
     unsigned int startpixel = 0;
 #ifdef SR_GNW
     unsigned int ringsize = 0;
+    unsigned int dispstart = 0, dispstride = 0, dispdouble = 0;
 #endif
 
     namespace

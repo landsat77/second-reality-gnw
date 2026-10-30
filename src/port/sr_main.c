@@ -134,10 +134,8 @@ static bool save_state(const char *path)
 /* ------------------------------------------------------------------ */
 /* Picture                                                            */
 /* ------------------------------------------------------------------ */
-static const uint8_t *last_vram;
-static uint32_t last_size, last_start, last_ring;
-static int last_w, last_h;
-static const uint32_t *last_pal;
+static sr_picture_t pic;
+static bool have_pic;
 static bool dirty;
 static uint16_t pal565[256];
 
@@ -147,20 +145,20 @@ static uint16_t pal565[256];
 /* line n of the picture */
 static const uint8_t *line_at(int n)
 {
-    uint32_t off = last_start + (uint32_t)n * (uint32_t)last_w;
-    if (last_ring)
-        off %= last_ring;
-    if (off + (uint32_t)last_w > last_size)
+    uint32_t off = pic.start + (uint32_t)(pic.dbl ? n >> 1 : n) * pic.stride;
+    if (pic.ring)
+        off %= pic.ring;
+    if (off + (uint32_t)pic.w > pic.size)
         off = 0; /* (not seen: a part showing outside the VGA memory) */
-    return last_vram + off;
+    return pic.vram + off;
 }
 
 static void convert(uint16_t *fb)
 {
-    const int w = last_w, h = last_h;
+    const int w = pic.w, h = pic.h;
 
     for (int i = 0; i < 256; i++) {
-        uint32_t c = last_pal[i];
+        uint32_t c = pic.palette[i];
         pal565[i] = (uint16_t)(((c >> 8) & 0xF800) | ((c >> 5) & 0x07E0) | ((c >> 3) & 0x001F));
     }
 
@@ -226,16 +224,10 @@ static void present_now(void)
     dirty = false;
 }
 
-void sr_plat_present(const uint8_t *vram, uint32_t size, uint32_t start, uint32_t ring, int w, int h,
-                     const uint32_t *palette)
+void sr_plat_present(const sr_picture_t *picture)
 {
-    last_vram = vram;
-    last_size = size;
-    last_start = start;
-    last_ring = ring;
-    last_w = w;
-    last_h = h;
-    last_pal = palette;
+    pic = *picture;
+    have_pic = true;
     dirty = true;
 #ifdef HOST_BUILD
     host_sr_on_present();
@@ -250,7 +242,7 @@ void sr_plat_present(const uint8_t *vram, uint32_t size, uint32_t start, uint32_
 static void repaint(void)
 {
     lcd_sleep_while_swap_pending();
-    if (last_vram)
+    if (have_pic)
         convert(lcd_get_active_buffer());
     common_ingame_overlay();
 }
@@ -258,7 +250,7 @@ static void repaint(void)
 static void *screenshot(void)
 {
     lcd_wait_for_vblank();
-    if (last_vram) {
+    if (have_pic) {
         convert(lcd_get_active_buffer());
         return lcd_get_active_buffer();
     }
@@ -424,7 +416,7 @@ static void run_input(void)
         vbl_base += spent;
         menu_paused = false;
         ring_attach(pcm_audio_pos()); /* the sound was perhaps restarted */
-        if (last_vram) {
+        if (have_pic) {
             lcd_sleep_while_swap_pending();
             present_now();
         }

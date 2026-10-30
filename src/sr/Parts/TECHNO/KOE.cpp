@@ -76,10 +76,23 @@ namespace KOE
 
         uint8_t vbuf[8192] = { 0 };
 
+#ifdef SR_GNW
+        // Game & Watch: memory of the console
+        // - planar_vram (4 planes x 8 pages of 8000 bytes, the "doit" parts):
+        //   23 blocks in the VGA memory not shown, 9 in koe_planar (used
+        //   before only) -> planar_block()
+        // - circlemem (the 8 rotations of the circle, 256 KB): computed when
+        //   read (circle_byte())
+        // - pic (troll.up): read in place; picdata: Shim::SCRATCH
+        uint8_t * planar_block(int plane, int page);
+#define planar_vram_block(plane, page) planar_block(plane, page)
+#else
         unsigned char planar_vram[4][8][40 * 200] = { 0 };
+#define planar_vram_block(plane, page) planar_vram[plane][page]
 
         char circlemem[16384 * 16] = {};
         char pic[20000 * 4]{};
+#endif
 
         char palette[PaletteByteCount]{};
         char palfade[13000]{};
@@ -96,6 +109,37 @@ namespace KOE
 
         unsigned char koe_tempbuf[PLANAR_WIDTH * DOUBlE_SCREEN_HEIGHT] = { 0 };
         unsigned char koe_planar[PLANAR_WIDTH * DOUBlE_SCREEN_HEIGHT * 4] = { 0 };
+
+#ifdef SR_GNW
+        // the "doit" parts show 320x200 (64000 bytes) and clear 65536 bytes
+        constexpr size_t PLANAR_VGA = 65536;
+        uint8_t * planar_block(int plane, int page)
+        {
+            const int n = plane * 8 + page;
+            if (n < 23) return Shim::vram + PLANAR_VGA + n * 8000;
+            return koe_planar + (n - 23) * 8000;
+        }
+        static_assert(PLANAR_VGA + 23 * 8000 <= Shim::VRAM_X * Shim::VRAM_Y, "planar_vram");
+        static_assert(9 * 8000 <= sizeof(koe_planar), "planar_vram");
+
+        void planar_clear()
+        {
+            for (int n = 0; n < 32; n++) memset(planar_block(n / 8, n % 8), 0, 8000);
+        }
+
+        // byte v of upstream's circlemem: circles[i] (at i * 32768) is the
+        // circle (koe_tempbuf, 32000 bytes) shifted right by i bits
+        inline uint8_t circle_byte(int32_t v)
+        {
+            if (v < 0 || v >= 8 * 32768) return 0;
+            const int r = v >> 15;
+            const int off = v & 32767;
+            if (off >= 32000) return 0;
+            if (r == 0) return koe_tempbuf[off];
+            const unsigned prev = off ? koe_tempbuf[off - 1] : 0;
+            return static_cast<uint8_t>((koe_tempbuf[off] >> r) | (prev << (8 - r)));
+        }
+#endif
 
         // Bit-reversal lookup table (matches Win32 ASM flip8)
         static const uint8_t flip8_table[256] = {
@@ -477,10 +521,10 @@ namespace KOE
             {
                 char bit = (x & 0x7);
                 unsigned char color = 0;
-                color |= ((planar_vram[0][page][idx]) & (1 << (7 - bit))) ? 1 : 0;
-                color |= ((planar_vram[1][page][idx]) & (1 << (7 - bit))) ? 2 : 0;
-                color |= ((planar_vram[2][page][idx]) & (1 << (7 - bit))) ? 4 : 0;
-                color |= ((planar_vram[3][page][idx]) & (1 << (7 - bit))) ? 8 : 0;
+                color |= ((planar_vram_block(0, page)[idx]) & (1 << (7 - bit))) ? 1 : 0;
+                color |= ((planar_vram_block(1, page)[idx]) & (1 << (7 - bit))) ? 2 : 0;
+                color |= ((planar_vram_block(2, page)[idx]) & (1 << (7 - bit))) ? 4 : 0;
+                color |= ((planar_vram_block(3, page)[idx]) & (1 << (7 - bit))) ? 8 : 0;
                 *(dst++) = color;
                 if (bit == 7) idx++;
             }
@@ -623,9 +667,11 @@ namespace KOE
         }
 
         // Copy 32k to circles[0], then build 7 rotated pages
+#ifndef SR_GNW
         memcpy(circles[0], koe_tempbuf, sizeof(koe_tempbuf));
         for (int i = 0; i < 7; ++i)
             rotate1_page_rcr(circles[i], circles[i + 1]);
+#endif
 
         // Build 3 planes into _koe_planar (planes 0..2), mirrored from circle
         const uint8_t * sc = Data::circle;
@@ -709,6 +755,12 @@ namespace KOE
 
                 // page = 7 - (eax & 7) ; src_base = circles[page]
                 uint8_t page = (uint8_t)(7u - (eax & 7));
+#ifdef SR_GNW
+                int32_t byte_off = sar_div8(eax);
+                const int32_t v = page * 32768 + (uint16_t)overyaA + byte_off + (int32_t)esi_base;
+                for (int i = 0; i < 44; i++)
+                    edi[i] = circle_byte(v + i);
+#else
                 const uint8_t * src = circles[page];
 
                 int32_t byte_off = sar_div8(eax);
@@ -718,6 +770,7 @@ namespace KOE
 
                 for (int i = 0; i < 44; i += 4)
                     *(uint32_t *)(edi + i) = *(const uint32_t *)(src + i);
+#endif
 
                 edi += PLANAR_WIDTH;
                 esi_base += PLANAR_WIDTH;
@@ -1147,7 +1200,7 @@ namespace KOE
                 vma--;
             }
 
-            asmdoit((char *)vbuf, (char *)(planar_vram[pl][plv]));
+            asmdoit((char *)vbuf, (char *)(planar_vram_block(pl, plv)));
             resolve_16color(plv, 0);
 
             plv++;
@@ -1209,7 +1262,7 @@ namespace KOE
                 vma--;
                 rota++;
             }
-            asmdoit((char *)vbuf, (char *)(planar_vram[pl][plv]));
+            asmdoit((char *)vbuf, (char *)(planar_vram_block(pl, plv)));
             resolve_16color(plv, 0);
 
             plv++;
@@ -1310,7 +1363,7 @@ namespace KOE
                 rota++;
             }
 
-            asmdoit((char *)vbuf, (char *)(planar_vram[pl][plv]));
+            asmdoit((char *)vbuf, (char *)(planar_vram_block(pl, plv)));
             resolve_16color(plv, SCREEN_WIDTH - xpos);
 
             a = plv * 0x20;
@@ -1332,6 +1385,15 @@ namespace KOE
 
         if (demo_wantstoquit()) return 0;
 
+#ifdef SR_GNW
+        const char * pic = Blob::data("troll.up");
+        demo_vsync();
+        demo_vsync();
+        demo_vsync();
+        using picdata_t = char[SCREEN_WIDTH * DOUBlE_SCREEN_HEIGHT];
+        SR_SCRATCH_CHECK(picdata_t, 0);
+        picdata_t & picdata = SR_SCRATCH(picdata_t, 0);
+#else
         {
             Blob::Handle h = Blob::open("troll.up");
             demo_vsync();
@@ -1345,6 +1407,7 @@ namespace KOE
         demo_vsync();
 
         static char picdata[SCREEN_WIDTH * DOUBlE_SCREEN_HEIGHT];
+#endif
 
         Common::readp(palette, -1, pic);
         for (y = 0; y < DOUBlE_SCREEN_HEIGHT; y++)
@@ -1505,10 +1568,14 @@ namespace KOE
 
         CLEAR(vbuf);
 
+#ifdef SR_GNW
+        planar_clear();
+#else
         CLEAR(planar_vram);
 
         CLEAR(circlemem);
         CLEAR(pic);
+#endif
 
         CLEAR(palette);
         CLEAR(palfade);
@@ -1649,7 +1716,11 @@ namespace KOE
         init_interference();
         do_interference();
 
+#ifdef SR_GNW
+        initinterferenceKOEA(nullptr);
+#else
         initinterferenceKOEA(circlemem);
+#endif
 
         if (!demo_wantstoquit())
         {
@@ -1727,6 +1798,9 @@ namespace KOE
 
         Shim::clearScreen();
 
+#ifdef SR_GNW
+        planar_clear(); // (8 blocks are in koe_planar, used until now)
+#endif
         doit1(70 * 6);
         doit2(70 * 12);
         doit3(70 * 14);
