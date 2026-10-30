@@ -1,3 +1,53 @@
+# CLAUDE.md — Second Reality homebrew (Retro-Go SD)
+
+This repo is ONE GWHB homebrew: Second Reality (Future Crew) from Second
+Reality++ (XorJS @ a4abc2a), for Retro-Go SD v2.0.0-rc1+ (ABI v2). The
+second part of this file is the SDK's generic guide.
+
+## Project notes
+
+- `src/sr`: Second Reality++ (parts, st3play, shims). Changes under
+  `#ifdef SR_GNW` (also defined for the PC build): data read-only and in
+  the pack, memory (below), st3play in place, Blob table, credits palettes
+  computed, JP zoom table, end scroller ring, shutdown in the VGA memory.
+  `src/sr_data`: the data files of Second Reality++, unchanged (plus
+  `JP_Zoom_Data.*`, tools/jp_zoom_gen.py), used only by the tools.
+- `tools/sr_data.py` -> `build/gen`: headers (references bound by
+  `sr_bind_data()`; `sr_flash_refs.o` has its .init_array renamed
+  `sr_init_array`), `sr_ram_data.cpp` (arrays < 4 KB in RAM), `sr_hot.cpp`
+  (HOT tables: copied to the part's memory at its start). Never take the
+  address of a data array in a static initialiser (bound later: Tunneli had
+  one, now a macro).
+- Pack `SecondReality.srd` ("SRD1", `src/port/sr_pack.h`): data + Blob files
+  + `st3:<song>:<instrument>` samples (tools/sr_music.cpp, st3play with
+  SR_ST3_EXPORT). Read-only: the PC build maps it read-only (a write
+  crashes there too).
+- Memory (`tools/sr_overlays.py`, `src/port/sr_core.ld`): one OVERLAY for
+  the .bss of the parts' groups (enum Group of sr_glue.cpp = GROUPS of the
+  tool), cleared by `sr_overlay_load()`; the parts' .data copied at start
+  and restored. `Shim::vram` is 640x402 (VGA 256 KB + end scroller ring);
+  parts 0-13 show at most 128000 bytes: the rest is scratch
+  (`SR_SCRATCH`, cleared by sr_demo_run before parts 0-14). RAM_EMU:
+  ~36 KB free (2026-10-30). Stack 24 KB: no big locals (Forest had 27 KB).
+- `src/port/sr_glue.cpp`: demo_vsync (VBLs since last call, like DOS
+  dis_waitb, max 35), demo_blit, AudioPlayer (sound ring position),
+  part loop (main.cpp), jumps (demo_wantstoquit() while a jump is pending).
+  `src/port/sr_main.c`: LCD 70 Hz (frame_counter = VBL), picture scaling,
+  sound ring (pcm_attach, 44.1 kHz, ~93 ms ahead), pause menu (part, loop),
+  saves = part index, log.txt (a line per part).
+- PC: `make host`, `make check` (tests/expected.txt: per-part SHA-1 of the
+  picture CRCs, 700 s). `SR_VRAM_PROBE=n`, `SR_WDOG_MS=n`, `SR_CPU=1` for
+  investigations (host/host_sr.c, host_emu.c).
+- Not tested yet on gwemu / the console (2026-10-30).
+
+### Releases
+
+- `CHANGELOG.md` section `## [vX.Y.Z] - date`; a release made on github.com
+  with tag `vX.Y.Z` makes the CI build and attach `SecondReality-vX.Y.Z.zip`
+  (homebrews/SecondReality.bin + .srd, INSTALL.md) and a debug zip.
+
+---
+
 # CLAUDE.md — Porting an emulator core (Retro-Go SD)
 
 This repository is a **single-project** template for a Game & Watch
