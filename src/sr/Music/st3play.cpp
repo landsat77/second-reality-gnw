@@ -2947,6 +2947,8 @@ namespace
         np_patoff = -1;
         jmptoord = -1;
         sampleMarkerCount = 0;
+        sampleMarkerIndex = 0; // (upstream did not reset it: once the ring of markers had
+                               // been full, the next song read the old song's markers)
 
         np_ord = startingOrder > ordNum ? 0 : static_cast<uint16_t>(startingOrder);
         neworder();

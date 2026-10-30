@@ -53,8 +53,8 @@ static inline uint32_t sr_frame_counter(void)
 #endif
 
 #define APP_ID APPID_HOMEBREW
-#define RING_SIZE 8192   /* samples, power of 2 */
-#define RING_AHEAD 4096  /* ~93 ms at 44.1 kHz */
+#define RING_SIZE 16384  /* samples, power of 2 (32 KB of DTCM) */
+#define RING_AHEAD 8192  /* ~186 ms at 44.1 kHz: the parts' start-ups */
 #define FEED_CHUNK 512
 
 extern bool sr_looping;

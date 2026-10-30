@@ -284,6 +284,7 @@ extern "C" void sr_demo_run(int start)
         {
             lastMusic = p.music;
             Music::start(p.music, p.musicStartOrder);
+            sr_plat_audio_feed(); // the sound ring empty no longer
         }
 
         if (index <= 14)

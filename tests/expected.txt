@@ -13,7 +13,7 @@ part 11: first picture at VBL  25817,  2515 pictures, da396be2679dbf8eade74abe8e
 part 12: first picture at VBL  28422,  2037 pictures, 50295d4ce5835cfa492cc96abd0543487a125923
 part 13: first picture at VBL  30482,  2012 pictures, 81c6511cca2f98a118dac135923c1e9b4a893a4b
 part 14: first picture at VBL  32497,   783 pictures, ba5df71c3ca06e8687d40d7624dac114a7f56211
-part 15: first picture at VBL  33282,  3684 pictures, 3cf2ca1b37f5559c82e483aab14980de2df9183f
-part 16: first picture at VBL  37034,   570 pictures, 961d961b90aa394700abf5f555e91ff374fdac7d
+part 15: first picture at VBL  33282,  3684 pictures, 34ae86dece8a9b09d59d2f74f126c27188a0278e
+part 16: first picture at VBL  37202,   402 pictures, 4cb88fcf34c6d1e0df5b5713e00f4fd9ad5710d5
 part 17: first picture at VBL  37606,  7581 pictures, ce01b334b6f900417dc23fdcc931e5207b6a9f30
 part 18: first picture at VBL  45210,  1895 pictures, 771164ec22511831411db8f3bc28402e02460988
