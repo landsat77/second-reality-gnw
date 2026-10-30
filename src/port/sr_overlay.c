@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #include "sr_platform.h"
+#include "sr_pack.h"
 
 #ifndef HOST_BUILD
 #include "gw_malloc.h"
@@ -39,12 +40,13 @@ void sr_overlay_load(int group)
         wdog_refresh();
     }
     loaded = group;
+    sr_hot_load(group);
     printf("sr: part memory '%s' %lu bytes (area %lu, parts' data %lu)\n", sr_group_names[group],
            (unsigned long)size, (unsigned long)(__sr_ovl_end - __sr_ovl_start), (unsigned long)data_size);
 }
 #else
 void sr_overlay_load(int group)
 {
-    (void)group;
+    sr_hot_load(group);
 }
 #endif

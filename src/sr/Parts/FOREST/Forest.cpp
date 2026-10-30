@@ -29,8 +29,11 @@ namespace Forest
 
     void main()
     {
-        uint8_t fbuf[640 * 31] = { 0 };
-        uint8_t font[237 * 31] = { 0 };
+        // (static: 27 KB, more than the console's stack)
+        static uint8_t fbuf[640 * 31];
+        static uint8_t font[237 * 31];
+        memset(fbuf, 0, sizeof(fbuf));
+        memset(font, 0, sizeof(font));
 
         uint8_t pal[PaletteByteCount] = { 0 };
         uint8_t fpal[PaletteByteCount] = { 0 };

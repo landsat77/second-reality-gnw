@@ -33,6 +33,7 @@ CORE_CXX_SOURCES := \
 	src/port/sr_pack.cpp \
 	src/port/sr_libc.cpp \
 	$(GEN)/sr_ram_data.cpp \
+	$(GEN)/sr_hot.cpp \
 	$(GEN)/sr_flash_refs.cpp
 
 CORE_C_SOURCES := \
@@ -53,7 +54,7 @@ include $(GNW_CORE_SDK)/Makefile
 
 # C++ of the demo: C++20 (as Second Reality++), its warnings are not ours
 SR_OBJECTS := $(addprefix $(BUILD_DIR)/,$(notdir $(SR_CXX_SOURCES:.cpp=.o)))
-$(SR_OBJECTS) $(BUILD_DIR)/sr_glue.o $(BUILD_DIR)/sr_ram_data.o $(BUILD_DIR)/sr_flash_refs.o \
+$(SR_OBJECTS) $(BUILD_DIR)/sr_glue.o $(BUILD_DIR)/sr_ram_data.o $(BUILD_DIR)/sr_hot.o $(BUILD_DIR)/sr_flash_refs.o \
 	$(BUILD_DIR)/sr_pack.o $(BUILD_DIR)/sr_libc.o: CXXFLAGS += -std=gnu++20 -w
 $(CXX_OBJECTS) $(C_OBJECTS): $(GEN)/.stamp Makefile
 
@@ -68,13 +69,13 @@ $(BUILD_DIR)/sr_flash_refs.o: $(GEN)/sr_flash_refs.cpp $(GEN)/.stamp | $(BUILD_D
 #######################################
 SR_DATA_FILES := $(shell find src/sr_data -type f)
 
-$(GEN)/.stamp: tools/sr_data.py $(SR_DATA_FILES)
+$(GEN)/.stamp: tools/sr_data.py tools/sr_overlays.py $(SR_DATA_FILES)
 	$(V)$(ECHO) [ DATA ] $(GEN)
 	$(V)mkdir -p $(GEN)
 	$(V)python3 tools/sr_data.py src/sr_data $(GEN)
 	$(V)touch $@
 
-$(GEN)/sr_ram_data.cpp $(GEN)/sr_flash_refs.cpp $(GEN)/sr_data.entries: $(GEN)/.stamp
+$(GEN)/sr_ram_data.cpp $(GEN)/sr_hot.cpp $(GEN)/sr_flash_refs.cpp $(GEN)/sr_data.entries: $(GEN)/.stamp
 
 $(GEN)/sr_music.entries: tools/sr_music.cpp src/sr/Music/st3play.cpp src/sr_data/Music/REALITY.FC.cpp
 	$(V)$(ECHO) [ MUSIC ] $@

@@ -25,6 +25,16 @@ const void *sr_pack_data(const char *name, uint32_t size);
 /* binds the references of build/gen/sr_flash_refs.cpp (after sr_pack_set) */
 void sr_bind_data(void);
 
+/* tables of the parts copied to RAM when the part starts (build/gen/sr_hot.cpp) */
+typedef struct {
+    int group;
+    void *ram;
+    const char *name;
+    uint32_t size;
+} sr_hot_t;
+extern const sr_hot_t sr_hot_table[];
+void sr_hot_load(int group);
+
 void sr_fatal(const char *message, const char *detail);
 
 #ifdef __cplusplus

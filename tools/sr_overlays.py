@@ -48,6 +48,7 @@ def main():
         f.write('OVERLAY __sr_ovl_start : NOCROSSREFS\n{\n')
         for name, objs in GROUPS:
             f.write('  .sr_ovl_%s\n  {\n' % name)
+            f.write('    *(.bss.sr_hot_%s)\n' % name)
             for o in objs:
                 f.write('    *%s.o(.bss .bss.* COMMON)\n' % o)
             f.write('    . = ALIGN(32);\n  }\n')

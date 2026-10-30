@@ -68,3 +68,10 @@ extern "C" void sr_bind_data(void)
     for (sr_init_fn *f = __start_sr_init_array; f < __stop_sr_init_array; f++)
         (*f)();
 }
+
+extern "C" void sr_hot_load(int group)
+{
+    for (const sr_hot_t *h = sr_hot_table; h->group >= 0; h++)
+        if (h->group == group)
+            memcpy(h->ram, sr_pack_data(h->name, h->size), h->size);
+}
