@@ -426,7 +426,10 @@ static int title_width(const char * t)
 extern "C" int sr_title_text(uint16_t * fb, int cx, int y0, const char * text, int sx, int sy, uint16_t color)
 {
     font_init();
-    static uint8_t line[FONT_H][640];
+    // the text at scale 1: in the VGA memory the logo does not use
+    using line_t = uint8_t[FONT_H][640];
+    SR_SCRATCH_CHECK(line_t, 0);
+    line_t & line = SR_SCRATCH(line_t, 0);
     int tw = title_width(text);
     if (tw > 640) tw = 640;
     memset(line, 0, sizeof(line));
