@@ -47,4 +47,9 @@ namespace Shim
 
     bool isDemoFirstPart();
     void finishedDemoFirstPart();
+#ifdef SR_GNW
+    // the demo starts at this part (a jump from the pause menu, a save):
+    // the part does not wait for the previous one's music cue
+    void startDemoHere();
+#endif
 }

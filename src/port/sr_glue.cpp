@@ -268,6 +268,7 @@ extern "C" void sr_demo_run(int start)
         {
             index = g_jump;
             g_jump = -1;
+            Shim::startDemoHere();
             lastMusic = Music::Song::COUNT; // the music from that part
         }
 
@@ -283,8 +284,9 @@ extern "C" void sr_demo_run(int start)
         if (lastMusic != p.music)
         {
             lastMusic = p.music;
+            // (the sound waits, silent, until the part first asks for it:
+            // its start-up can be long, the music must not go on meanwhile)
             Music::start(p.music, p.musicStartOrder);
-            sr_plat_audio_feed(); // the sound ring empty no longer
         }
 
         if (index <= 14)

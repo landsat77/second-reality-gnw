@@ -4,6 +4,17 @@ Release tags match a section heading (`## [vX.Y.Z] - date`): a release made
 on github.com with that tag makes the CI build and attach
 `SecondReality-vX.Y.Z.zip`.
 
+## [v1.0.1] - 2026-11-01
+
+After the first test on the console (log.txt):
+
+- The music of a part waits until the part is ready: no more silence at
+  the start of the demo (2.3 s of sound were lost while the first part
+  read its data from the flash).
+- A part reached from the pause menu or with GAME / TIME starts at once
+  (3D-Sinusfield stayed black: it waited for the previous part's cue).
+- log.txt: the idle time was wrong after 15 s (counter wrap).
+
 ## [v1.0.0] - 2026-10-30
 
 First version: Second Reality (Future Crew, 1993), from Second Reality++

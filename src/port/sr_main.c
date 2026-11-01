@@ -63,8 +63,10 @@ static odroid_gamepad_state_t joystick;
 
 /* statistics (stats_part()) */
 #define DWT_CYCCNT (*(volatile uint32_t *)0xE0001004)
-static uint64_t stat_idle_cycles;
-static uint32_t stat_cycles0, stat_vbl0, stat_presents, stat_longest, stat_last_present;
+static uint64_t stat_idle_cycles, stat_total_cycles;
+static uint32_t stat_last_cycles;
+static void stat_count_cycles(void);
+static uint32_t stat_vbl0, stat_presents, stat_longest, stat_last_present;
 static int stat_part = -1;
 static char stat_log_path[200];
 static uint32_t audio_missed;
@@ -492,6 +494,7 @@ void sr_plat_service(void)
     in_service = 1;
 
     wdog_refresh();
+    stat_count_cycles();
 #ifdef HOST_BUILD
     host_sr_service();
 #endif
@@ -532,6 +535,16 @@ void sr_plat_wait_vbl(uint32_t vbl)
 /* ------------------------------------------------------------------ */
 /* Statistics: a line per part in <saves>/log.txt                     */
 /* ------------------------------------------------------------------ */
+/* the cycle counter wraps every 15 s: counted in 64 bits at each service */
+static void stat_count_cycles(void)
+{
+#ifndef HOST_BUILD
+    uint32_t now = DWT_CYCCNT;
+    stat_total_cycles += (uint32_t)(now - stat_last_cycles);
+    stat_last_cycles = now;
+#endif
+}
+
 static void stats_part(int part)
 {
     uint32_t vbls = sr_plat_vbl() - stat_vbl0;
@@ -539,8 +552,8 @@ static void stats_part(int part)
         char line[200];
         uint32_t secs10 = vbls * 10 / SR_REFRESH_HZ;
 #ifndef HOST_BUILD
-        uint32_t cycles = DWT_CYCCNT - stat_cycles0;
-        uint32_t idle = cycles ? (uint32_t)(stat_idle_cycles * 100 / cycles) : 0;
+        stat_count_cycles();
+        uint32_t idle = stat_total_cycles ? (uint32_t)(stat_idle_cycles * 100 / stat_total_cycles) : 0;
 #else
         uint32_t idle = 0;
 #endif
@@ -560,11 +573,10 @@ static void stats_part(int part)
     stat_vbl0 = sr_plat_vbl();
     stat_presents = 0;
     stat_longest = 0;
+    stat_count_cycles();
     stat_idle_cycles = 0;
+    stat_total_cycles = 0;
     audio_missed = 0;
-#ifndef HOST_BUILD
-    stat_cycles0 = DWT_CYCCNT;
-#endif
 }
 
 void sr_plat_part_start(int part)

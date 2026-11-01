@@ -115,4 +115,11 @@ namespace Shim
     {
         isFirstPart = false;
     }
+
+#ifdef SR_GNW
+    void startDemoHere()
+    {
+        isFirstPart = true;
+    }
+#endif
 }
