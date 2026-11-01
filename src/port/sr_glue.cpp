@@ -19,6 +19,9 @@
 
 #include "sr_platform.h"
 
+#include "BeginTitleScreen_Data.h"
+#include "CREDITS_MAIN_Data.h"
+
 #define FORWARD_PART(X) \
     namespace X         \
     {                   \
@@ -262,6 +265,7 @@ extern "C" void sr_demo_run(int start)
 {
     Music::Song lastMusic = Music::Song::COUNT;
 
+    g_quit = false;
     for (int index = start; index < SR_PART_COUNT && !g_quit; index++)
     {
         if (g_jump >= 0)
@@ -332,4 +336,134 @@ extern "C" void sr_demo_run(int start)
         }
     }
     g_part = -1;
+    g_jump = -1;
+    g_quit = false;
+    st3play::Close(); // silence (AudioPlayer::closeMixer)
+}
+
+/* --- the title screen (sr_main.c): the logo of the demo, the font of the
+ * credits --- */
+
+extern "C" void sr_title_logo(sr_picture_t * p)
+{
+    // as the Logo part (BeginTitleScreen.cpp): 320x400 and its palette
+    Palette palette{};
+    Shim::clearScreen();
+    Common::readp(palette, -1, (const char *)Beg::Data::TitleScreenData);
+    for (int y = 0; y < DOUBlE_SCREEN_HEIGHT; y++)
+    {
+        Common::readp((char *)(Shim::vram + (unsigned)y * 320U), y, (const char *)Beg::Data::TitleScreenData);
+    }
+    Common::setpalarea(palette, 0, 254);
+    Shim::setpal(254, 0, 0, 0);
+    Shim::setpal(255, 0, 0, 0);
+    p->vram = Shim::vram;
+    p->size = Shim::VRAM_X * Shim::VRAM_Y;
+    p->start = 0;
+    p->stride = SCREEN_WIDTH;
+    p->ring = 0;
+    p->w = SCREEN_WIDTH;
+    p->h = DOUBlE_SCREEN_HEIGHT;
+    p->dbl = 0;
+    p->palette = reinterpret_cast<const uint32_t *>(Shim::palette);
+}
+
+namespace
+{
+    // the letters of Credits::Data::credits_font (as credits_init())
+    constexpr int FONT_H = 32;
+    int font_p[256], font_w[256];
+
+    void font_init()
+    {
+        static bool ready;
+        if (ready) return;
+        ready = true;
+        const char * order = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/?!:,.\"()+-";
+        int x = 0, y;
+        for (; x < 1500 && *order;)
+        {
+            while (x < 1500)
+            {
+                for (y = 0; y < FONT_H; y++)
+                    if (Credits::Data::credits_font[y][x]) break;
+                if (y != FONT_H) break;
+                x++;
+            }
+            const int b = x;
+            while (x < 1500)
+            {
+                for (y = 0; y < FONT_H; y++)
+                    if (Credits::Data::credits_font[y][x]) break;
+                if (y == FONT_H) break;
+                x++;
+            }
+            font_p[static_cast<unsigned char>(*order)] = b;
+            font_w[static_cast<unsigned char>(*order)] = x - b;
+            order++;
+        }
+        font_p[32] = 1500 - 32;
+        font_w[32] = 8;
+    }
+
+    inline unsigned char font_upper(char c)
+    {
+        return static_cast<unsigned char>(c >= 'a' && c <= 'z' ? c - 32 : c);
+    }
+}
+
+// width in the font (pixels, scale 1)
+static int title_width(const char * t)
+{
+    int w = 0;
+    for (; *t; t++) w += font_w[font_upper(*t)] + 2;
+    return w > 0 ? w - 2 : 0;
+}
+
+/* text centred on cx, top y, scaled by sx / 256 and sy / 256 (smaller
+ * only), blended over the LCD (the font is 0..9: from transparent to
+ * `color`; each pixel takes the strongest point of the area it covers) */
+extern "C" int sr_title_text(uint16_t * fb, int cx, int y0, const char * text, int sx, int sy, uint16_t color)
+{
+    font_init();
+    static uint8_t line[FONT_H][640];
+    int tw = title_width(text);
+    if (tw > 640) tw = 640;
+    memset(line, 0, sizeof(line));
+    int x = 0;
+    for (const char * t = text; *t && x < 640; t++)
+    {
+        const unsigned char c = font_upper(*t);
+        for (int k = 0; k < font_w[c] && x + k < 640; k++)
+            for (int y = 0; y < FONT_H; y++)
+                line[y][x + k] = static_cast<uint8_t>(Credits::Data::credits_font[y][font_p[c] + k]);
+        x += font_w[c] + 2;
+    }
+    const int w = (tw * sx + 255) / 256;
+    const int h = (FONT_H * sy + 255) / 256;
+    const int x0 = cx - w / 2;
+    const int cr = color >> 11, cg = (color >> 5) & 63, cb = color & 31;
+    for (int dy = 0; dy < h; dy++)
+    {
+        const int y = y0 + dy;
+        if (y < 0 || y >= 240) continue;
+        const int fy0 = dy * 256 / sy, fy1 = (dy + 1) * 256 / sy;
+        for (int dx = 0; dx < w; dx++)
+        {
+            const int px = x0 + dx;
+            if (px < 0 || px >= 320) continue;
+            const int fx0 = dx * 256 / sx, fx1 = (dx + 1) * 256 / sx;
+            int a = 0;
+            for (int fy = fy0; fy < fy1 && fy < FONT_H; fy++)
+                for (int fx = fx0; fx < fx1 && fx < tw; fx++)
+                    if (line[fy][fx] > a) a = line[fy][fx];
+            if (!a) continue;
+            uint16_t & d = fb[y * 320 + px];
+            const int r = ((d >> 11) * (9 - a) + cr * a) / 9;
+            const int g = (((d >> 5) & 63) * (9 - a) + cg * a) / 9;
+            const int b = ((d & 31) * (9 - a) + cb * a) / 9;
+            d = static_cast<uint16_t>(r << 11 | g << 5 | b);
+        }
+    }
+    return w;
 }

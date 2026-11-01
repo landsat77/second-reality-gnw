@@ -13,6 +13,9 @@
  *                      (default 70), or at SR_SHOT_AT="vbl,vbl,..."
  *   SR_WAV=file        the sound (WAV, mono)
  *   SR_JUMP="vbl:part,..." go to a part (as from the pause menu)
+ *   SR_TITLE=1         the title screen (else the demo starts at once)
+ *   SR_KEYS="vbl:keys,..." buttons held from that VBL (U D L R A B G=GAME
+ *                      T=TIME, - = none) on the title screen
  */
 #pragma once
 #include <stdint.h>
@@ -23,6 +26,8 @@ extern "C" {
 void host_sr_on_present(void);
 void host_sr_idle(void);
 void host_sr_service(void);
+struct odroid_gamepad_state;
+void host_sr_keys(void *joystick);
 #ifdef __cplusplus
 }
 #endif

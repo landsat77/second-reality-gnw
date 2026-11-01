@@ -60,6 +60,11 @@ void sr_demo_jump(int part);
 /* the end (back to the launcher) */
 void sr_demo_quit(void);
 
+/* the title screen: the demo's logo (in the VGA memory) and its font */
+void sr_title_logo(sr_picture_t *picture);
+/* returns the width (pixels) */
+int sr_title_text(uint16_t *fb, int cx, int y, const char *text, int sx, int sy, uint16_t color);
+
 /* memory of the parts (sr_overlay.c / host: no overlays) */
 void sr_overlay_load(int group);
 

@@ -10,8 +10,10 @@
  * - The music (st3play) is mixed ahead into a ring that the audio
  *   interrupt plays (pcm_attach); the demo follows what is heard.
  * - Pause menu: the part to play, loop; saves: the part being played.
+ * - Title screen: play, play in a loop, play from a part; the end of the
+ *   demo comes back to it.
  * - Buttons: GAME = next part, TIME = previous part; in the end scroller,
- *   A or B = back to the launcher.
+ *   A or B = back to the title screen.
  */
 #include <stdint.h>
 #include <stdbool.h>
@@ -78,36 +80,7 @@ static bool menu_paused;
 /* ------------------------------------------------------------------ */
 /* Options and saves                                                  */
 /* ------------------------------------------------------------------ */
-typedef struct {
-    uint32_t magic;
-    uint8_t loop;
-    uint8_t pad[3];
-} sr_options_t;
-#define SR_OPTIONS_MAGIC 0x53524F31 /* "SRO1" */
-static sr_options_t options = { SR_OPTIONS_MAGIC, 0, { 0 } };
 static char save_dir[160];
-static char options_path[200];
-
-static void options_load(void)
-{
-    FILE *f = fopen(options_path, "rb");
-    if (!f)
-        return;
-    sr_options_t o;
-    if (fread(&o, sizeof(o), 1, f) == 1 && o.magic == SR_OPTIONS_MAGIC)
-        options = o;
-    fclose(f);
-    sr_looping = options.loop != 0;
-}
-
-static void options_save(void)
-{
-    FILE *f = fopen(options_path, "wb");
-    if (!f)
-        return;
-    fwrite(&options, sizeof(options), 1, f);
-    fclose(f);
-}
 
 /* a save = the part being played (the demo starts again from there) */
 typedef struct {
@@ -416,12 +389,9 @@ static bool part_cb(odroid_dialog_choice_t *option, odroid_dialog_event_t event,
 static bool loop_cb(odroid_dialog_choice_t *option, odroid_dialog_event_t event, uint32_t repeat)
 {
     (void)repeat;
-    if (event == ODROID_DIALOG_PREV || event == ODROID_DIALOG_NEXT || event == ODROID_DIALOG_ENTER) {
-        options.loop = !options.loop;
-        sr_looping = options.loop != 0;
-        options_save();
-    }
-    strncpy(option->value, gw_i18n(options.loop ? i18n_yes : i18n_no), 11);
+    if (event == ODROID_DIALOG_PREV || event == ODROID_DIALOG_NEXT || event == ODROID_DIALOG_ENTER)
+        sr_looping = !sr_looping;
+    strncpy(option->value, gw_i18n(sr_looping ? i18n_yes : i18n_no), 11);
     option->value[11] = '\0';
     return false;
 }
@@ -442,6 +412,9 @@ static void run_input(void)
 {
     static bool game_held, time_held;
     odroid_input_read_gamepad(&joystick);
+#ifdef HOST_BUILD
+    host_sr_keys(&joystick);
+#endif
 
     bool menu_key = joystick.values[ODROID_INPUT_VOLUME] != 0;
     if (menu_key) {
@@ -453,7 +426,7 @@ static void run_input(void)
 
     menu_part = sr_demo_part() < 0 ? 0 : sr_demo_part();
     part_label();
-    strncpy(loop_value, gw_i18n(options.loop ? i18n_yes : i18n_no), 11);
+    strncpy(loop_value, gw_i18n(sr_looping ? i18n_yes : i18n_no), 11);
     loop_value[11] = '\0';
 
     common_emu_input_loop(&joystick, game_options, &repaint);
@@ -585,6 +558,111 @@ void sr_plat_part_start(int part)
 }
 
 /* ------------------------------------------------------------------ */
+/* Title screen: play the demo, play it in a loop, play from a part   */
+/* ------------------------------------------------------------------ */
+static const gw_i18n_entry_t i18n_t_play[] = {
+    { "en", "PLAY THE DEMO" }, { "fr", "LANCER LA DEMO" }, { "es", "VER LA DEMO" }, { "de", "DEMO STARTEN" },
+    { "it", "AVVIA LA DEMO" }, { "pt", "VER A DEMO" }, GW_I18N_END
+};
+static const gw_i18n_entry_t i18n_t_loop[] = {
+    { "en", "PLAY IN A LOOP" }, { "fr", "DEMO EN BOUCLE" }, { "es", "DEMO EN BUCLE" }, { "de", "DEMO IN SCHLEIFE" },
+    { "it", "DEMO IN CICLO" }, { "pt", "DEMO EM CICLO" }, GW_I18N_END
+};
+static const gw_i18n_entry_t i18n_t_from[] = {
+    { "en", "START FROM A PART" }, { "fr", "DEPUIS UNE PARTIE" }, { "es", "DESDE UNA PARTE" }, { "de", "AB EINEM TEIL" },
+    { "it", "DA UNA PARTE" }, { "pt", "DE UMA PARTE" }, GW_I18N_END
+};
+
+#define T_ROWS 3
+#define C_TEXT 0xC618     /* light grey */
+#define C_SELECT 0xFEA0   /* warm yellow */
+#define C_DIM 0x7BCF      /* grey */
+
+static sr_picture_t title_pic;
+
+static void title_draw(int sel, int part)
+{
+    lcd_sleep_while_swap_pending();
+    uint16_t *fb = lcd_get_active_buffer();
+    pic = title_pic;
+    have_pic = true;
+    convert(fb);
+    /* the menu's band: the logo darkened */
+    for (int i = 140 * 320; i < 240 * 320; i++)
+        fb[i] = (fb[i] >> 2) & 0x39E7;
+
+    const char *rows[T_ROWS] = { gw_i18n(i18n_t_play), gw_i18n(i18n_t_loop), gw_i18n(i18n_t_from) };
+    for (int r = 0; r < T_ROWS; r++)
+        sr_title_text(fb, 160, 146 + r * 22, rows[r], 200, 140, r == sel ? C_SELECT : C_TEXT);
+    char line[48];
+    snprintf(line, sizeof(line), "%d %s", part + 1, sr_part_name(part));
+    uint16_t c = sel == 2 ? C_SELECT : C_DIM;
+    int w = sr_title_text(fb, 160, 214, line, 150, 110, c);
+    /* arrows: left / right change the part */
+    for (int k = 0; k < 6; k++) {
+        for (int dy = -k; dy <= k; dy++) {
+            int y = 221 + dy;
+            fb[y * 320 + 160 - w / 2 - 16 + k] = c;
+            fb[y * 320 + 160 + w / 2 + 15 - k] = c;
+        }
+    }
+
+    common_ingame_overlay();
+    lcd_swap();
+    dirty = false;
+}
+
+/* returns the first part; *loop: play in a loop */
+static int title_screen(bool *loop)
+{
+    static int sel, part;
+    odroid_gamepad_state_t prev = { 0 }, j;
+    int held = 0;
+
+    sr_title_logo(&title_pic);
+    title_draw(sel, part);
+    /* the buttons of the previous screen: released first */
+    for (;;) {
+        sr_plat_wait_vbl(sr_plat_vbl() + 1);
+        odroid_input_read_gamepad(&prev);
+        if (!prev.values[ODROID_INPUT_A] && !prev.values[ODROID_INPUT_B] && !prev.values[ODROID_INPUT_START])
+            break;
+    }
+    for (;;) {
+        sr_plat_wait_vbl(sr_plat_vbl() + 1);
+        odroid_input_read_gamepad(&j);
+#ifdef HOST_BUILD
+        host_sr_keys(&j);
+#endif
+        int s0 = sel, p0 = part;
+#define PRESSED(k) (j.values[k] && !prev.values[k])
+        if (PRESSED(ODROID_INPUT_UP))
+            sel = (sel + T_ROWS - 1) % T_ROWS;
+        if (PRESSED(ODROID_INPUT_DOWN))
+            sel = (sel + 1) % T_ROWS;
+        /* left / right: the part (repeated when held) */
+        int lr = j.values[ODROID_INPUT_RIGHT] ? 1 : j.values[ODROID_INPUT_LEFT] ? -1 : 0;
+        if (lr) {
+            if (held == 0 || (held > 25 && held % 6 == 0)) {
+                part = (part + SR_PART_COUNT + lr) % SR_PART_COUNT;
+                sel = 2;
+            }
+            held++;
+        } else {
+            held = 0;
+        }
+        if (PRESSED(ODROID_INPUT_A) || PRESSED(ODROID_INPUT_START)) {
+            *loop = sel == 1;
+            return sel == 2 ? part : 0;
+        }
+#undef PRESSED
+        prev = j;
+        if (sel != s0 || part != p0 || !lcd_is_swap_pending())
+            title_draw(sel, part);
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /* Entry                                                              */
 /* ------------------------------------------------------------------ */
 static void show_error(const char *msg, const char *detail)
@@ -655,8 +733,6 @@ void app_main(uint8_t load_state_flag, uint8_t start_paused, int8_t save_slot)
         rg_storage_mkdir(ODROID_BASE_PATH_SAVES "/secondreality");
         snprintf(save_dir, sizeof(save_dir), ODROID_BASE_PATH_SAVES "/secondreality/%s", name);
         rg_storage_mkdir(save_dir);
-        snprintf(options_path, sizeof(options_path), "%s/gnw_options.bin", save_dir);
-        options_load();
         snprintf(stat_log_path, sizeof(stat_log_path), "%s/log.txt", save_dir);
         FILE *f = fopen(stat_log_path, "w");
         if (f) {
@@ -688,11 +764,31 @@ void app_main(uint8_t load_state_flag, uint8_t start_paused, int8_t save_slot)
     vbl_base = sr_frame_counter();
     last_input_frame = vbl_base;
 
+    /* "Resume": the saved part at once; then (and at the end of the
+     * demo) the title screen */
+    bool resume = false;
     if (load_state_flag)
-        odroid_system_emu_load_state(save_slot);
+        resume = odroid_system_emu_load_state(save_slot);
 
-    sr_demo_run(0);
-    stats_part(-1);
+    for (;;) {
+        int start = 0;
+#ifdef HOST_BUILD
+        if (!getenv("SR_TITLE"))
+            resume = true; /* the tests: no title screen */
+#endif
+        if (!resume) {
+            bool loop = false;
+            start = title_screen(&loop);
+            sr_looping = loop;
+        }
+        resume = false;
+        sr_demo_run(start);
+        stats_part(-1);
+#ifdef HOST_BUILD
+        if (!getenv("SR_TITLE"))
+            break; /* the tests: once */
+#endif
+    }
 
     /* the end: back to the launcher */
     pcm_audio_enable(0);

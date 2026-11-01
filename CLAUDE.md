@@ -34,7 +34,10 @@ second part of this file is the SDK's generic guide.
   part loop (main.cpp), jumps (demo_wantstoquit() while a jump is pending).
   `src/port/sr_main.c`: LCD 70 Hz (frame_counter = VBL), picture scaling,
   sound ring (pcm_attach, 44.1 kHz, ~93 ms ahead), pause menu (part, loop),
-  saves = part index, log.txt (a line per part).
+  saves = part index, log.txt (a line per part), title screen
+  (`title_screen()`: logo of the Logo part + credits font through
+  `sr_title_logo()` / `sr_title_text()` of sr_glue.cpp; the PC build shows
+  it only with SR_TITLE=1, buttons scripted with SR_KEYS).
 - PC: `make host`, `make check` (tests/expected.txt: per-part SHA-1 of the
   picture CRCs, 700 s). `SR_VRAM_PROBE=n`, `SR_WDOG_MS=n`, `SR_CPU=1` for
   investigations (host/host_sr.c, host_emu.c).

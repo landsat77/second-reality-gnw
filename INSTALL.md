@@ -14,11 +14,17 @@ Copy both files of `homebrews/` to the `/homebrews/` folder of the SD card:
 They must keep the same name. The demo is in the **Homebrew** tab. At the
 first start the `.srd` is copied to the console's flash (a few seconds).
 
+## Title screen
+
+- Up / down: choose, A (or GAME): start
+- PLAY THE DEMO, PLAY IN A LOOP, or START FROM A PART (left / right: the
+  part)
+
 ## Buttons
 
 - PAUSE/SET: Retro-Go menu (save, options: go to a part, loop)
 - GAME: next part, TIME: previous part
-- End scroller: A or B = back to the launcher
+- End scroller: A or B = back to the title screen
 
 "Save" remembers the part being played; "Resume" starts the demo again from
 that part.
@@ -47,12 +53,18 @@ Ils doivent garder le même nom. La démo est dans l'onglet **Homebrew**. Au
 premier lancement, le `.srd` est copié dans la flash de la console (quelques
 secondes).
 
+## Écran titre
+
+- Haut / bas : choisir, A (ou GAME) : lancer
+- LANCER LA DEMO, DEMO EN BOUCLE ou DEPUIS UNE PARTIE (gauche / droite : la
+  partie)
+
 ## Boutons
 
 - PAUSE/SET : menu Retro-Go (sauvegarde, options : aller à une partie, en
   boucle)
 - GAME : partie suivante, TIME : partie précédente
-- Défilement de fin : A ou B = retour au lanceur
+- Défilement de fin : A ou B = retour à l'écran titre
 
 « Sauvegarder » retient la partie en cours ; « Reprendre » relance la démo à
 partir de cette partie.

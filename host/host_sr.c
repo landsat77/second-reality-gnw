@@ -419,3 +419,37 @@ void host_sr_vram_probe(void)
 int host_sr_vram_clear(void) { return 0; }
 void host_sr_vram_probe(void) {}
 #endif
+
+/* SR_KEYS="vbl:keys,...": buttons held from that VBL on */
+#include "odroid_input.h"
+void host_sr_keys(void *joystick)
+{
+    odroid_gamepad_state_t *j = joystick;
+    const char *script = getenv("SR_KEYS");
+    const char *held = NULL;
+    long vbl = (long)lcd_get_frame_counter();
+    for (const char *p = script; p && *p;) {
+        long at = atol(p);
+        const char *colon = strchr(p, ':');
+        if (!colon || at > vbl)
+            break;
+        held = colon + 1;
+        p = strchr(colon, ',');
+        if (p)
+            p++;
+    }
+    if (!held)
+        return;
+    for (const char *c = held; *c && *c != ','; c++) {
+        switch (*c) {
+        case 'U': j->values[ODROID_INPUT_UP] = 1; break;
+        case 'D': j->values[ODROID_INPUT_DOWN] = 1; break;
+        case 'L': j->values[ODROID_INPUT_LEFT] = 1; break;
+        case 'R': j->values[ODROID_INPUT_RIGHT] = 1; break;
+        case 'A': j->values[ODROID_INPUT_A] = 1; break;
+        case 'B': j->values[ODROID_INPUT_B] = 1; break;
+        case 'G': j->values[ODROID_INPUT_START] = 1; break;
+        case 'T': j->values[ODROID_INPUT_SELECT] = 1; break;
+        }
+    }
+}

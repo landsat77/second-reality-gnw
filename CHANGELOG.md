@@ -4,6 +4,13 @@ Release tags match a section heading (`## [vX.Y.Z] - date`): a release made
 on github.com with that tag makes the CI build and attach
 `SecondReality-vX.Y.Z.zip`.
 
+## [v1.1.0] - 2026-11-01
+
+- Title screen (the demo's logo, the font of its credits): play the demo,
+  play it in a loop, or play it from a part (left / right). The end of the
+  demo (or A / B in the end scroller) comes back to it.
+- "Resume" still starts the saved part at once.
+
 ## [v1.0.1] - 2026-11-01
 
 After the first test on the console (log.txt):
